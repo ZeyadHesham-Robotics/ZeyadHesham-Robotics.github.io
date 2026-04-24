@@ -1,0 +1,8 @@
+# Backup and temp files (kept locally but not committed)
+*.bak
+*.bak-body
+*.new
+*.original-singlefile.html
+*.swp
+.DS_Store
+Thumbs.db
