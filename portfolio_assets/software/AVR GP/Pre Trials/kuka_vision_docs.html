@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KUKA Vision Pipeline — Code Documentation</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700;900&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:         #0a0c0f;
+    --bg2:        #0f1217;
+    --bg3:        #151820;
+    --panel:      #1a1e27;
+    --border:     #252b38;
+    --border-hi:  #2e3749;
+    --orange:     #ff6b1a;
+    --orange-dim: #a33e00;
+    --orange-glow:#ff6b1a44;
+    --cyan:       #00d4ff;
+    --cyan-dim:   #006480;
+    --green:      #39ff6e;
+    --green-dim:  #0d4020;
+    --yellow:     #ffd447;
+    --red:        #ff3b5c;
+    --text:       #c8d0e0;
+    --text-dim:   #5a6478;
+    --text-bright:#e8edf5;
+    --mono:       'Share Tech Mono', monospace;
+    --sans:       'Barlow', sans-serif;
+    --cond:       'Barlow Condensed', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ── SCANLINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    padding: 80px 60px 60px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    background: linear-gradient(135deg, #0a0c0f 0%, #0f1520 100%);
+  }
+
+  header::after {
+    content: '';
+    position: absolute;
+    top: -40px; right: -80px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, var(--orange-glow) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .header-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--orange);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-tag::before {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--orange);
+    border-radius: 50%;
+    animation: blink 1.4s step-end infinite;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  h1 {
+    font-family: var(--cond);
+    font-size: clamp(42px, 7vw, 88px);
+    font-weight: 900;
+    color: var(--text-bright);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+
+  h1 span { color: var(--orange); }
+
+  .header-sub {
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--text-dim);
+    max-width: 560px;
+    line-height: 1.6;
+  }
+
+  .header-meta {
+    margin-top: 32px;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .meta-item strong {
+    color: var(--cyan);
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ── SIDEBAR ── */
+  nav {
+    border-right: 1px solid var(--border);
+    padding: 40px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+
+  nav::-webkit-scrollbar { width: 3px; }
+  nav::-webkit-scrollbar-track { background: transparent; }
+  nav::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+  .nav-section {
+    padding: 0 24px;
+    margin-bottom: 28px;
+  }
+
+  .nav-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    padding: 0 0 10px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+  }
+
+  nav a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 4px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 400;
+    transition: all 0.15s;
+    border-left: 2px solid transparent;
+  }
+
+  nav a:hover {
+    color: var(--text-bright);
+    background: var(--panel);
+    border-left-color: var(--orange);
+  }
+
+  nav a .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--border-hi);
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+
+  nav a:hover .dot { background: var(--orange); }
+
+  .pipeline-diagram {
+    margin: 20px 24px 0;
+    padding: 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 2.2;
+  }
+
+  .pipeline-diagram .arrow { color: var(--orange-dim); }
+  .pipeline-diagram .node  { color: var(--cyan); }
+
+  /* ── MAIN CONTENT ── */
+  main {
+    padding: 56px 64px;
+    max-width: 900px;
+  }
+
+  /* ── SECTION ── */
+  .section {
+    margin-bottom: 72px;
+    opacity: 0;
+    transform: translateY(18px);
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section:nth-child(1)  { animation-delay: 0.05s; }
+  .section:nth-child(2)  { animation-delay: 0.10s; }
+  .section:nth-child(3)  { animation-delay: 0.15s; }
+  .section:nth-child(4)  { animation-delay: 0.20s; }
+  .section:nth-child(5)  { animation-delay: 0.25s; }
+  .section:nth-child(6)  { animation-delay: 0.30s; }
+  .section:nth-child(7)  { animation-delay: 0.35s; }
+  .section:nth-child(8)  { animation-delay: 0.40s; }
+  .section:nth-child(9)  { animation-delay: 0.45s; }
+  .section:nth-child(10) { animation-delay: 0.50s; }
+  .section:nth-child(11) { animation-delay: 0.55s; }
+  .section:nth-child(12) { animation-delay: 0.60s; }
+  .section:nth-child(13) { animation-delay: 0.65s; }
+
+  .section-eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--orange);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  h2 {
+    font-family: var(--cond);
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--text-bright);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  h2::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 28px;
+    background: var(--orange);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 28px 0 10px;
+  }
+
+  p {
+    color: var(--text);
+    margin-bottom: 16px;
+    max-width: 700px;
+    font-weight: 300;
+  }
+
+  /* ── CLASS CARD ── */
+  .class-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 32px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .class-card:hover { border-color: var(--border-hi); }
+
+  .class-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    background: var(--bg3);
+  }
+
+  .class-name {
+    font-family: var(--mono);
+    font-size: 17px;
+    color: var(--orange);
+    margin-bottom: 4px;
+  }
+
+  .class-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 300;
+  }
+
+  .class-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .badge-config   { background: #1a2030; color: var(--cyan);   border: 1px solid var(--cyan-dim); }
+  .badge-logic    { background: #201510; color: var(--orange);  border: 1px solid var(--orange-dim); }
+  .badge-data     { background: #0d1a14; color: var(--green);   border: 1px solid var(--green-dim); }
+  .badge-io       { background: #201018; color: #c060ff;        border: 1px solid #5a1080; }
+  .badge-math     { background: #1a1a10; color: var(--yellow);  border: 1px solid #5a4800; }
+  .badge-ui       { background: #181010; color: var(--red);     border: 1px solid #5a1020; }
+  .badge-core     { background: #101820; color: var(--cyan);    border: 1px solid var(--cyan-dim); }
+
+  .class-body {
+    padding: 20px 24px;
+  }
+
+  /* ── PROPS TABLE ── */
+  .prop-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 12px;
+  }
+
+  .prop-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+
+  .prop-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .prop-table tr:last-child td { border-bottom: none; }
+  .prop-table tr:hover td { background: var(--bg3); }
+
+  .prop-table .prop-name {
+    font-family: var(--mono);
+    color: var(--cyan);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .prop-table .prop-type {
+    font-family: var(--mono);
+    color: var(--yellow);
+    font-size: 12px;
+  }
+
+  .prop-table .prop-default {
+    font-family: var(--mono);
+    color: var(--orange);
+    font-size: 12px;
+  }
+
+  .prop-table .prop-note {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 300;
+  }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--orange);
+    border-radius: 6px;
+    padding: 18px 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text);
+  }
+
+  .code-block .kw  { color: var(--orange); }
+  .code-block .cl  { color: var(--cyan); }
+  .code-block .fn  { color: var(--yellow); }
+  .code-block .st  { color: var(--green); }
+  .code-block .cm  { color: var(--text-dim); font-style: italic; }
+  .code-block .nm  { color: #c78fff; }
+  .code-block .op  { color: var(--text-dim); }
+
+  /* ── CALLOUT ── */
+  .callout {
+    padding: 14px 18px;
+    border-radius: 6px;
+    margin: 16px 0;
+    font-size: 13.5px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .callout-icon { flex-shrink: 0; font-size: 16px; line-height: 1.7; }
+
+  .callout.info    { background: #0d1520; border: 1px solid var(--cyan-dim);   color: #7ec8e3; }
+  .callout.warn    { background: #1a1400; border: 1px solid #5a4000;           color: var(--yellow); }
+  .callout.tip     { background: #0a1a10; border: 1px solid var(--green-dim);  color: #7adfa0; }
+  .callout.danger  { background: #1a0810; border: 1px solid #5a1020;           color: #ff7090; }
+
+  /* ── FLOW DIAGRAM ── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin: 24px 0;
+    row-gap: 12px;
+  }
+
+  .flow-node {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--cyan);
+    white-space: nowrap;
+    transition: border-color 0.2s, color 0.2s;
+    cursor: default;
+  }
+
+  .flow-node:hover { border-color: var(--orange); color: var(--orange); }
+
+  .flow-arrow {
+    padding: 0 8px;
+    color: var(--text-dim);
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  /* ── OVERVIEW TABLE ── */
+  .overview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin: 20px 0;
+  }
+
+  .overview-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 10px 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+  }
+
+  .overview-table td {
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .overview-table tr:hover td { background: var(--panel); }
+
+  .overview-table .td-class {
+    font-family: var(--mono);
+    color: var(--orange);
+    white-space: nowrap;
+  }
+
+  .overview-table .td-role  { color: var(--text); font-weight: 300; }
+  .overview-table .td-badge { }
+
+  /* ── DIVIDER ── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { display: none; }
+    main { padding: 32px 24px; }
+    header { padding: 48px 24px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ HEADER ══════════════════════════════════════════════════ -->
+<header>
+  <div class="header-tag">System Documentation — v2.0 Refactored</div>
+  <h1>KUKA<br/><span>Vision</span><br/>Pipeline</h1>
+  <p class="header-sub">
+    Orange cube detection &amp; pose estimation system for KUKA robot integration.
+    Full OOP architecture with Kalman filtering, stability gating, and TCP transmission.
+  </p>
+  <div class="header-meta">
+    <div class="meta-item"><strong>12 Classes</strong>Single-file module</div>
+    <div class="meta-item"><strong>OpenCV + NumPy</strong>Dependencies</div>
+    <div class="meta-item"><strong>Python 3.10+</strong>Runtime</div>
+    <div class="meta-item"><strong>640 × 480</strong>Default resolution</div>
+    <div class="meta-item"><strong>5 cm</strong>Cube size target</div>
+  </div>
+</header>
+
+<div class="layout">
+
+<!-- ══ SIDEBAR NAV ══════════════════════════════════════════════ -->
+<nav>
+  <div class="nav-section">
+    <div class="nav-label">Overview</div>
+    <a href="#overview"><span class="dot"></span>Architecture</a>
+    <a href="#pipeline-flow"><span class="dot"></span>Data Flow</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Config Classes</div>
+    <a href="#cameracfg"><span class="dot"></span>CameraConfig</a>
+    <a href="#robotcfg"><span class="dot"></span>RobotConfig</a>
+    <a href="#colorcfg"><span class="dot"></span>ColorConfig</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Data & Logic</div>
+    <a href="#detection-result"><span class="dot"></span>DetectionResult</a>
+    <a href="#kalman"><span class="dot"></span>KalmanTracker</a>
+    <a href="#detector"><span class="dot"></span>CubeDetector</a>
+    <a href="#transformer"><span class="dot"></span>CoordinateTransformer</a>
+    <a href="#stability"><span class="dot"></span>StabilityGuard</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">I/O & Utilities</div>
+    <a href="#bridge"><span class="dot"></span>RobotBridge</a>
+    <a href="#logger"><span class="dot"></span>DetectionLogger</a>
+    <a href="#renderer"><span class="dot"></span>OverlayRenderer</a>
+    <a href="#hsvtuner"><span class="dot"></span>HSVTuner</a>
+    <a href="#cammanager"><span class="dot"></span>CameraManager</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Orchestrator</div>
+    <a href="#visionpipeline"><span class="dot"></span>VisionPipeline</a>
+  </div>
+
+  <div class="pipeline-diagram">
+    <div class="node">CameraManager</div>
+    <div class="arrow">  ↓  frame</div>
+    <div class="node">CubeDetector</div>
+    <div class="arrow">  ↓  DetectionResult</div>
+    <div class="node">KalmanTracker</div>
+    <div class="arrow">  ↓  smoothed px</div>
+    <div class="node">CoordinateTransformer</div>
+    <div class="arrow">  ↓  robot coords</div>
+    <div class="node">StabilityGuard</div>
+    <div class="arrow">  ↓  stable?</div>
+    <div class="node">RobotBridge</div>
+    <div class="arrow">  +  DetectionLogger</div>
+    <div class="node">OverlayRenderer</div>
+  </div>
+</nav>
+
+<!-- ══ MAIN ══════════════════════════════════════════════════════ -->
+<main>
+
+  <!-- ── ARCHITECTURE OVERVIEW ── -->
+  <section class="section" id="overview">
+    <div class="section-eyebrow">01 — Architecture</div>
+    <h2>System Overview</h2>
+    <p>
+      The pipeline is a single Python module composed of 12 classes, each with a single responsibility.
+      A <strong>VisionPipeline</strong> orchestrator instantiates and wires every component.
+      Configs are loaded from JSON files at startup, so you can tune parameters without touching code.
+    </p>
+
+    <table class="overview-table">
+      <thead>
+        <tr>
+          <th>Class</th>
+          <th>Category</th>
+          <th>Responsibility</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="td-class">CameraConfig</td><td><span class="class-badge badge-config">Config</span></td><td class="td-role">Camera index, resolution, focal length, principal point</td></tr>
+        <tr><td class="td-class">RobotConfig</td><td><span class="class-badge badge-config">Config</span></td><td class="td-role">Robot transform offsets, workspace limits, TCP address</td></tr>
+        <tr><td class="td-class">ColorConfig</td><td><span class="class-badge badge-config">Config</span></td><td class="td-role">HSV thresholds for orange segmentation</td></tr>
+        <tr><td class="td-class">DetectionResult</td><td><span class="class-badge badge-data">Dataclass</span></td><td class="td-role">Carries all per-frame data through the pipeline</td></tr>
+        <tr><td class="td-class">KalmanTracker</td><td><span class="class-badge badge-math">Math</span></td><td class="td-role">Constant-velocity Kalman filter on pixel center (cx, cy)</td></tr>
+        <tr><td class="td-class">CubeDetector</td><td><span class="class-badge badge-logic">Vision</span></td><td class="td-role">HSV segmentation → contour → rotated bounding rect</td></tr>
+        <tr><td class="td-class">CoordinateTransformer</td><td><span class="class-badge badge-math">Math</span></td><td class="td-role">Pinhole depth estimation + rigid camera→robot transform</td></tr>
+        <tr><td class="td-class">StabilityGuard</td><td><span class="class-badge badge-logic">Logic</span></td><td class="td-role">Gate: only emit pose after N frames within threshold</td></tr>
+        <tr><td class="td-class">RobotBridge</td><td><span class="class-badge badge-io">I/O</span></td><td class="td-role">TCP socket sender to KUKA controller</td></tr>
+        <tr><td class="td-class">DetectionLogger</td><td><span class="class-badge badge-io">I/O</span></td><td class="td-role">Append stable detections to CSV for offline analysis</td></tr>
+        <tr><td class="td-class">OverlayRenderer</td><td><span class="class-badge badge-ui">UI</span></td><td class="td-role">Draw bounding box, angle arrow, telemetry text, FPS</td></tr>
+        <tr><td class="td-class">HSVTuner</td><td><span class="class-badge badge-ui">UI</span></td><td class="td-role">Interactive trackbar window to calibrate color thresholds</td></tr>
+        <tr><td class="td-class">CameraManager</td><td><span class="class-badge badge-core">Core</span></td><td class="td-role">Auto-detect + open VideoCapture, configure resolution</td></tr>
+        <tr><td class="td-class">VisionPipeline</td><td><span class="class-badge badge-core">Orchestrator</span></td><td class="td-role">Main loop: wires all components together</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── DATA FLOW ── -->
+  <section class="section" id="pipeline-flow">
+    <div class="section-eyebrow">02 — Data Flow</div>
+    <h2>Pipeline Flow</h2>
+    <p>Each video frame travels through a deterministic chain. The result of one stage becomes the input of the next.</p>
+
+    <div class="flow">
+      <div class="flow-node">Camera frame</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">CubeDetector</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">KalmanTracker</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">CoordinateTransformer</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">StabilityGuard</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">RobotBridge + Logger</div>
+    </div>
+
+    <div class="callout info">
+      <span class="callout-icon">ℹ</span>
+      <span>If <code>CubeDetector</code> returns <code>None</code> (no blob found), the Kalman tracker and StabilityGuard are both reset, and no data is sent downstream.</span>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠</span>
+      <span>The depth estimate uses a simple pinhole model: <strong>Z = (fx × cube_size_m) / pixel_size</strong>. For best accuracy, replace the hardcoded <code>fx=800</code> with a real calibration using <code>cv2.calibrateCamera()</code>.</span>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ── CAMERACFG ── -->
+  <section class="section" id="cameracfg">
+    <div class="section-eyebrow">03 — Config Classes</div>
+    <h2>CameraConfig</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">CameraConfig</div>
+          <div class="class-desc">Dataclass — stores every camera-related parameter. Serialises to/from JSON.</div>
+        </div>
+        <span class="class-badge badge-config">Config</span>
+      </div>
+      <div class="class-body">
+        <table class="prop-table">
+          <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="prop-name">index</td><td class="prop-type">int</td><td class="prop-default">1</td><td class="prop-note">Camera index passed to VideoCapture</td></tr>
+            <tr><td class="prop-name">width / height</td><td class="prop-type">int</td><td class="prop-default">640 / 480</td><td class="prop-note">Must match your calibration resolution</td></tr>
+            <tr><td class="prop-name">fx / fy</td><td class="prop-type">float</td><td class="prop-default">800.0</td><td class="prop-note">Focal lengths in pixels — <em>calibrate these!</em></td></tr>
+            <tr><td class="prop-name">cx / cy</td><td class="prop-type">float?</td><td class="prop-default">None</td><td class="prop-note">Principal point; defaults to width/2, height/2</td></tr>
+            <tr><td class="prop-name">backend</td><td class="prop-type">int</td><td class="prop-default">CAP_MSMF</td><td class="prop-note">Windows: MSMF works best with Camo</td></tr>
+            <tr><td class="prop-name">auto_detect</td><td class="prop-type">bool</td><td class="prop-default">True</td><td class="prop-note">Scan all indices and pick first working camera</td></tr>
+          </tbody>
+        </table>
+        <h3>Methods</h3>
+        <p><code style="color:var(--yellow)">principal_point()</code> — Returns <code>(cx, cy)</code> using explicit values or computed centre.</p>
+        <p><code style="color:var(--yellow)">from_json(path)</code> / <code style="color:var(--yellow)">to_json(path)</code> — Load or save config to a JSON file so you never hard-code parameters again.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ROBOTCFG ── -->
+  <section class="section" id="robotcfg">
+    <div class="section-eyebrow">03 — Config Classes</div>
+    <h2>RobotConfig</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">RobotConfig</div>
+          <div class="class-desc">Dataclass — camera-to-robot transform offsets, workspace limits, TCP address.</div>
+        </div>
+        <span class="class-badge badge-config">Config</span>
+      </div>
+      <div class="class-body">
+        <table class="prop-table">
+          <thead><tr><th>Field</th><th>Default (mm)</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="prop-name">cam_offset_x/y/z</td><td class="prop-default">600 / 0 / 800</td><td class="prop-note">Translation from camera origin to robot base — <em>measure precisely with a ruler</em></td></tr>
+            <tr><td class="prop-name">robot_a / robot_b</td><td class="prop-default">180 / 0</td><td class="prop-note">Fixed A and B Euler angles sent in every E6POS</td></tr>
+            <tr><td class="prop-name">workspace_x</td><td class="prop-default">(300, 900)</td><td class="prop-note">Safety clamp: only send poses within this X range</td></tr>
+            <tr><td class="prop-name">workspace_y</td><td class="prop-default">(-400, 400)</td><td class="prop-note">Safety clamp: only send poses within this Y range</td></tr>
+            <tr><td class="prop-name">tcp_ip / tcp_port</td><td class="prop-default">192.168.1.100 / 30000</td><td class="prop-note">KUKA RSI or KRL socket server address</td></tr>
+          </tbody>
+        </table>
+        <div class="callout danger">
+          <span class="callout-icon">🔴</span>
+          <span>The <strong>workspace_x / workspace_y</strong> limits are your only software safety fence. Set them conservatively before enabling TCP transmission.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── COLORCFG ── -->
+  <section class="section" id="colorcfg">
+    <div class="section-eyebrow">03 — Config Classes</div>
+    <h2>ColorConfig</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">ColorConfig</div>
+          <div class="class-desc">HSV range + morphology settings for orange blob segmentation.</div>
+        </div>
+        <span class="class-badge badge-config">Config</span>
+      </div>
+      <div class="class-body">
+        <table class="prop-table">
+          <thead><tr><th>Field</th><th>Default</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="prop-name">lower_h/s/v</td><td class="prop-default">8 / 100 / 100</td><td class="prop-note">Lower bound of HSV orange range</td></tr>
+            <tr><td class="prop-name">upper_h/s/v</td><td class="prop-default">35 / 255 / 255</td><td class="prop-note">Upper bound of HSV orange range</td></tr>
+            <tr><td class="prop-name">min_area</td><td class="prop-default">1500 px²</td><td class="prop-note">Contours smaller than this are noise and discarded</td></tr>
+            <tr><td class="prop-name">kernel_size</td><td class="prop-default">7</td><td class="prop-note">Elliptical morphology kernel side length</td></tr>
+          </tbody>
+        </table>
+        <p>Use <strong>HSVTuner</strong> to set these interactively. The tuner saves a <code>color_config.json</code> that is loaded automatically on next startup.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ── DETECTIONRESULT ── -->
+  <section class="section" id="detection-result">
+    <div class="section-eyebrow">04 — Data Carrier</div>
+    <h2>DetectionResult</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">DetectionResult</div>
+          <div class="class-desc">Dataclass — single object that carries all per-detection data through the pipeline.</div>
+        </div>
+        <span class="class-badge badge-data">Dataclass</span>
+      </div>
+      <div class="class-body">
+        <p>Created by <strong>CubeDetector</strong> with pixel-space fields; then <em>mutated in-place</em> by <strong>CoordinateTransformer</strong> to add 3-D and robot-space coords.</p>
+        <table class="prop-table">
+          <thead><tr><th>Field</th><th>Type</th><th>Set by</th></tr></thead>
+          <tbody>
+            <tr><td class="prop-name">cx_px, cy_px</td><td class="prop-type">float</td><td class="prop-note">CubeDetector → smoothed by KalmanTracker</td></tr>
+            <tr><td class="prop-name">angle_deg</td><td class="prop-type">float [0,90)</td><td class="prop-note">CubeDetector — in-plane rotation mod 90°</td></tr>
+            <tr><td class="prop-name">pixel_size</td><td class="prop-type">float</td><td class="prop-note">CubeDetector — max(width, height) of rotated rect</td></tr>
+            <tr><td class="prop-name">area</td><td class="prop-type">float</td><td class="prop-note">CubeDetector — contour area in pixels²</td></tr>
+            <tr><td class="prop-name">box</td><td class="prop-type">ndarray 4×2</td><td class="prop-note">CubeDetector — corners of the rotated rectangle</td></tr>
+            <tr><td class="prop-name">x/y/z_cam_mm</td><td class="prop-type">float</td><td class="prop-note">CoordinateTransformer — camera-frame 3-D position</td></tr>
+            <tr><td class="prop-name">x/y/z_robot_mm</td><td class="prop-type">float</td><td class="prop-note">CoordinateTransformer — robot-base-frame position</td></tr>
+            <tr><td class="prop-name">in_workspace</td><td class="prop-type">bool</td><td class="prop-note">CoordinateTransformer — passes workspace safety check</td></tr>
+            <tr><td class="prop-name">timestamp</td><td class="prop-type">float</td><td class="prop-note">Auto-set to time.time() at creation</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ── KALMAN ── -->
+  <section class="section" id="kalman">
+    <div class="section-eyebrow">05 — Smoothing</div>
+    <h2>KalmanTracker</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">KalmanTracker</div>
+          <div class="class-desc">Constant-velocity Kalman filter on the 2-D pixel-space centre (cx, cy).</div>
+        </div>
+        <span class="class-badge badge-math">Math</span>
+      </div>
+      <div class="class-body">
+        <p>
+          Raw contour centres jump by several pixels frame-to-frame due to noise, lighting variation, and partial occlusion.
+          The Kalman filter models the cube centre as moving at constant velocity, so its prediction resists outlier jumps while still tracking genuine motion.
+        </p>
+        <p>State vector: <code style="color:var(--cyan)">[x, y, vx, vy]</code> — position and velocity. Measurement vector: <code style="color:var(--cyan)">[x, y]</code>.</p>
+
+        <div class="code-block">
+<span class="cm"># State transition (dt = 1 frame)</span>
+<span class="cl">F</span> <span class="op">=</span> [[<span class="nm">1</span>, <span class="nm">0</span>, dt, <span class="nm">0</span>],
+     [<span class="nm">0</span>, <span class="nm">1</span>,  <span class="nm">0</span>, dt],
+     [<span class="nm">0</span>, <span class="nm">0</span>,  <span class="nm">1</span>,  <span class="nm">0</span>],
+     [<span class="nm">0</span>, <span class="nm">0</span>,  <span class="nm">0</span>,  <span class="nm">1</span>]]
+
+<span class="cm"># Usage</span>
+<span class="cl">smooth_cx</span>, <span class="cl">smooth_cy</span> <span class="op">=</span> tracker.<span class="fn">update</span>(raw_cx, raw_cy)
+        </div>
+
+        <h3>Methods</h3>
+        <p><code style="color:var(--yellow)">update(cx, cy) → (float, float)</code> — Predict + correct cycle. Returns the smoothed centre.</p>
+        <p><code style="color:var(--yellow)">reset()</code> — Call when detection is lost so the filter re-initialises on next detection.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DETECTOR ── -->
+  <section class="section" id="detector">
+    <div class="section-eyebrow">06 — Detection</div>
+    <h2>CubeDetector</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">CubeDetector</div>
+          <div class="class-desc">Converts a BGR frame into a DetectionResult using HSV segmentation and contour analysis.</div>
+        </div>
+        <span class="class-badge badge-logic">Vision</span>
+      </div>
+      <div class="class-body">
+        <h3>Processing chain</h3>
+        <div class="flow">
+          <div class="flow-node">Gaussian blur</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">BGR→HSV</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">inRange mask</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">OPEN morph</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">CLOSE morph</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">findContours</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">minAreaRect</div>
+        </div>
+
+        <h3>Angle Normalisation</h3>
+        <p>
+          <code>cv2.minAreaRect</code> returns angles in <code>(-90, 0]</code>. For a square/cube, 90° rotations are equivalent, so the angle is collapsed to <code>[0, 90)</code>:
+        </p>
+        <div class="code-block">
+<span class="kw">if</span> rw <span class="op">&lt;</span> rh:
+    angle <span class="op">+=</span> <span class="nm">90</span>      <span class="cm"># align reference to long axis</span>
+angle <span class="op">=</span> angle <span class="op">%</span> <span class="nm">90</span>       <span class="cm"># collapse cube's 90° symmetry → [0, 90)</span>
+        </div>
+
+        <h3>Methods</h3>
+        <p><code style="color:var(--yellow)">detect(frame) → DetectionResult | None</code> — Single detection pass. Returns None if no blob or blob is too small.</p>
+        <p><code style="color:var(--yellow)">detect_with_mask(frame) → (result, mask)</code> — Same, but also returns the binary mask for the debug window.</p>
+        <p><code style="color:var(--yellow)">build_mask(frame) → np.ndarray</code> — Exposed separately so you can inspect or test the mask independently.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TRANSFORMER ── -->
+  <section class="section" id="transformer">
+    <div class="section-eyebrow">07 — Geometry</div>
+    <h2>CoordinateTransformer</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">CoordinateTransformer</div>
+          <div class="class-desc">Implements the full pixel → camera 3-D → robot base coordinate chain.</div>
+        </div>
+        <span class="class-badge badge-math">Math</span>
+      </div>
+      <div class="class-body">
+        <h3>Step 1 — Depth from Apparent Size</h3>
+        <p>The cube's known physical size and measured pixel footprint let us recover depth using the pinhole model:</p>
+        <div class="code-block">
+Z <span class="op">=</span> (fx <span class="op">×</span> cube_size_m) <span class="op">/</span> pixel_size   <span class="cm"># metres</span>
+X <span class="op">=</span> (cx_px <span class="op">-</span> cx0) <span class="op">×</span> Z <span class="op">/</span> fx
+Y <span class="op">=</span> (cy_px <span class="op">-</span> cy0) <span class="op">×</span> Z <span class="op">/</span> fy
+        </div>
+
+        <h3>Step 2 — Camera → Robot Base Frame</h3>
+        <p>A simple translation + axis flip (camera Y is flipped w.r.t. robot Y, depth becomes negative Z offset):</p>
+        <div class="code-block">
+robot_x <span class="op">=</span> cam_offset_x <span class="op">+</span> X_cam_mm
+robot_y <span class="op">=</span> cam_offset_y <span class="op">-</span> Y_cam_mm   <span class="cm"># Y-axis inversion</span>
+robot_z <span class="op">=</span> cam_offset_z <span class="op">-</span> Z_cam_mm   <span class="cm"># depth inversion</span>
+        </div>
+
+        <h3>Step 3 — Workspace check</h3>
+        <p>Sets <code>result.in_workspace = True</code> only when the robot X and Y are inside the configured safety bounds.</p>
+
+        <h3>E6POS Serialisation</h3>
+        <p><code style="color:var(--yellow)">to_e6pos(result) → str</code> — Formats a KUKA E6POS string:</p>
+        <div class="code-block">
+<span class="st">"{X 653.40, Y 12.80, Z 247.10, A 180.00, B 0.00, C 37.50}"</span>
+        </div>
+
+        <div class="callout tip">
+          <span class="callout-icon">✓</span>
+          <span>The <strong>C</strong> field in E6POS carries the in-plane rotation angle of the cube — allowing the robot gripper to align with the cube's face before grasping.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STABILITY ── -->
+  <section class="section" id="stability">
+    <div class="section-eyebrow">08 — Safety Gate</div>
+    <h2>StabilityGuard</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">StabilityGuard</div>
+          <div class="class-desc">Prevents the robot from chasing every flicker — only fires after N consecutive stable frames.</div>
+        </div>
+        <span class="class-badge badge-logic">Logic</span>
+      </div>
+      <div class="class-body">
+        <p>
+          A detected pose is considered <em>stable</em> when the robot-frame position has not changed by more than <code>threshold_mm</code> (default 5 mm) for at least <code>required_frames</code> (default 5) consecutive frames.
+        </p>
+        <div class="code-block">
+<span class="cm"># In VisionPipeline.run():</span>
+<span class="kw">if</span> guard.<span class="fn">is_stable</span>(result):
+    bridge.<span class="fn">send</span>(e6pos)   <span class="cm"># only now — cube has settled</span>
+        </div>
+        <div class="callout warn">
+          <span class="callout-icon">⚠</span>
+          <span>Call <code>guard.reset()</code> whenever <code>CubeDetector</code> returns None, so the counter starts fresh on the next detection.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ── ROBOT BRIDGE ── -->
+  <section class="section" id="bridge">
+    <div class="section-eyebrow">09 — I/O</div>
+    <h2>RobotBridge</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">RobotBridge</div>
+          <div class="class-desc">TCP socket sender. Set enabled=False for dry-run / simulation mode.</div>
+        </div>
+        <span class="class-badge badge-io">I/O</span>
+      </div>
+      <div class="class-body">
+        <p>Opens a fresh TCP connection per message (stateless). The KUKA controller must be running a KRL socket server or RSI listener at the configured IP:port.</p>
+        <div class="code-block">
+bridge <span class="op">=</span> <span class="cl">RobotBridge</span>(ip=<span class="st">"192.168.1.100"</span>, port=<span class="nm">30000</span>, enabled=<span class="kw">False</span>)
+bridge.<span class="fn">send</span>(e6pos)   <span class="cm"># prints [DRY-RUN] when enabled=False</span>
+        </div>
+        <p><code style="color:var(--yellow)">send(message) → bool</code> — Returns True on success, False on TCP error. Always wraps in try/except with a 2-second timeout.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── LOGGER ── -->
+  <section class="section" id="logger">
+    <div class="section-eyebrow">09 — I/O</div>
+    <h2>DetectionLogger</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">DetectionLogger</div>
+          <div class="class-desc">Appends every stable detection to a CSV file for offline drift analysis.</div>
+        </div>
+        <span class="class-badge badge-io">I/O</span>
+      </div>
+      <div class="class-body">
+        <p>CSV columns: <code>timestamp, x_robot_mm, y_robot_mm, z_robot_mm, angle_deg, pixel_size, area</code>.</p>
+        <p>The file is opened in append mode (<code>"a"</code>), so runs accumulate without overwriting previous data. The header row is written only if the file is empty.</p>
+        <p>Use the log to spot systematic drift across sessions, evaluate calibration accuracy, or build a dataset for further improvements.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── RENDERER ── -->
+  <section class="section" id="renderer">
+    <div class="section-eyebrow">10 — Visualisation</div>
+    <h2>OverlayRenderer</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">OverlayRenderer</div>
+          <div class="class-desc">All cv2 drawing calls in one place — annotates the live frame for debugging.</div>
+        </div>
+        <span class="class-badge badge-ui">UI</span>
+      </div>
+      <div class="class-body">
+        <p>Drawn elements per frame:</p>
+        <table class="prop-table">
+          <thead><tr><th>Element</th><th>Color</th><th>Condition</th></tr></thead>
+          <tbody>
+            <tr><td class="prop-name">Rotated bounding box</td><td class="prop-note">Green / Red</td><td class="prop-note">Green = in workspace, Red = outside</td></tr>
+            <tr><td class="prop-name">Centre dot</td><td class="prop-note">Red</td><td class="prop-note">Always when detected</td></tr>
+            <tr><td class="prop-name">Angle arrow</td><td class="prop-note">Yellow</td><td class="prop-note">40px line showing cube rotation direction</td></tr>
+            <tr><td class="prop-name">Camera XYZ (mm)</td><td class="prop-note">White</td><td class="prop-note">Camera-frame coordinates</td></tr>
+            <tr><td class="prop-name">Robot XYZ (mm)</td><td class="prop-note">White</td><td class="prop-note">Robot-base-frame coordinates</td></tr>
+            <tr><td class="prop-name">Workspace / Stable</td><td class="prop-note">White</td><td class="prop-note">✓ or ✗ status indicators</td></tr>
+            <tr><td class="prop-name">E6POS string</td><td class="prop-note">Green</td><td class="prop-note">Only when in_workspace is True</td></tr>
+            <tr><td class="prop-name">FPS counter</td><td class="prop-note">Cyan</td><td class="prop-note">Bottom-left, always shown</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HSV TUNER ── -->
+  <section class="section" id="hsvtuner">
+    <div class="section-eyebrow">11 — Calibration</div>
+    <h2>HSVTuner</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">HSVTuner</div>
+          <div class="class-desc">Run-once interactive window for calibrating orange detection thresholds under your lighting.</div>
+        </div>
+        <span class="class-badge badge-ui">UI</span>
+      </div>
+      <div class="class-body">
+        <p>Opens a trackbar window displaying the live masked image. Adjust the 6 sliders (H/S/V min and max) until only the orange cube is visible in the mask. Press <strong>S</strong> to save to JSON, <strong>Q</strong> to quit.</p>
+        <div class="code-block">
+<span class="cm"># Uncomment in __main__ to run before the pipeline:</span>
+<span class="cl">HSVTuner</span>(cam_cfg.index, cam_cfg.backend, <span class="st">"color_config.json"</span>).<span class="fn">run</span>()
+        </div>
+        <div class="callout tip">
+          <span class="callout-icon">✓</span>
+          <span>Re-run the tuner any time you change lighting conditions or move to a different environment. The saved JSON is loaded automatically on next startup.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CAMERA MANAGER ── -->
+  <section class="section" id="cammanager">
+    <div class="section-eyebrow">12 — Hardware</div>
+    <h2>CameraManager</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">CameraManager</div>
+          <div class="class-desc">Handles camera enumeration, opening, resolution configuration, and release.</div>
+        </div>
+        <span class="class-badge badge-core">Core</span>
+      </div>
+      <div class="class-body">
+        <p>When <code>auto_detect=True</code>, <code>list_working()</code> iterates indices 0–7, tries to open and grab a frame from each, and returns the indices that work. The pipeline uses the configured index if it appears in that list, otherwise falls back to the first working camera.</p>
+        <div class="code-block">
+<span class="cm"># Typical auto-detect output:</span>
+<span class="st">✅ Available cameras: [0, 1]</span>
+<span class="st">📷 Opened camera 1  (640×480)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ── VISION PIPELINE ── -->
+  <section class="section" id="visionpipeline">
+    <div class="section-eyebrow">13 — Orchestrator</div>
+    <h2>VisionPipeline</h2>
+    <div class="class-card">
+      <div class="class-header">
+        <div>
+          <div class="class-name">VisionPipeline</div>
+          <div class="class-desc">Top-level class. Instantiates all components and runs the main capture loop.</div>
+        </div>
+        <span class="class-badge badge-core">Orchestrator</span>
+      </div>
+      <div class="class-body">
+        <h3>Constructor parameters</h3>
+        <table class="prop-table">
+          <thead><tr><th>Parameter</th><th>Default</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="prop-name">cam_cfg</td><td class="prop-default">CameraConfig()</td><td class="prop-note">Camera settings</td></tr>
+            <tr><td class="prop-name">robot_cfg</td><td class="prop-default">RobotConfig()</td><td class="prop-note">Robot transform & workspace</td></tr>
+            <tr><td class="prop-name">color_cfg</td><td class="prop-default">ColorConfig()</td><td class="prop-note">HSV segmentation parameters</td></tr>
+            <tr><td class="prop-name">cube_size_m</td><td class="prop-default">0.05</td><td class="prop-note">Physical cube size in metres</td></tr>
+            <tr><td class="prop-name">log_path</td><td class="prop-default">None</td><td class="prop-note">Set to a filename to enable CSV logging</td></tr>
+            <tr><td class="prop-name">send_robot</td><td class="prop-default">False</td><td class="prop-note">Enable TCP transmission to robot</td></tr>
+            <tr><td class="prop-name">stability</td><td class="prop-default">(5, 5.0)</td><td class="prop-note">(required_frames, threshold_mm)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Main loop logic</h3>
+        <div class="code-block">
+<span class="kw">while</span> <span class="kw">True</span>:
+    ret, frame <span class="op">=</span> cap.<span class="fn">read</span>()
+    result, mask <span class="op">=</span> detector.<span class="fn">detect_with_mask</span>(frame)
+
+    <span class="kw">if</span> result:
+        result.cx_px, result.cy_px <span class="op">=</span> tracker.<span class="fn">update</span>(...)   <span class="cm"># smooth</span>
+        result <span class="op">=</span> transformer.<span class="fn">transform</span>(result)              <span class="cm"># 3-D coords</span>
+
+        <span class="kw">if</span> result.in_workspace:
+            e6pos  <span class="op">=</span> transformer.<span class="fn">to_e6pos</span>(result)
+            stable <span class="op">=</span> guard.<span class="fn">is_stable</span>(result)
+
+            <span class="kw">if</span> stable:
+                bridge.<span class="fn">send</span>(e6pos)     <span class="cm"># TCP to KUKA</span>
+                logger.<span class="fn">log</span>(result)     <span class="cm"># CSV append</span>
+    <span class="kw">else</span>:
+        tracker.<span class="fn">reset</span>()
+        guard.<span class="fn">reset</span>()
+
+    vis <span class="op">=</span> renderer.<span class="fn">draw</span>(frame, result, stable, e6pos)
+    cv2.<span class="fn">imshow</span>(<span class="st">"Vision → KUKA"</span>, vis)
+        </div>
+
+        <div class="callout info">
+          <span class="callout-icon">ℹ</span>
+          <span>The loop is wrapped in a <code>try / finally</code> block, so the camera is always released and all windows are destroyed even if an exception occurs.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── QUICK START ── -->
+  <section class="section">
+    <div class="section-eyebrow">14 — Usage</div>
+    <h2>Quick Start</h2>
+
+    <h3>1. Calibrate your camera</h3>
+    <p>Replace <code>fx=800, fy=800</code> in <code>CameraConfig</code> with values from <code>cv2.calibrateCamera()</code> using a chessboard. Save to <code>camera_config.json</code>.</p>
+
+    <h3>2. Tune your HSV thresholds</h3>
+    <div class="code-block">
+<span class="cm"># Uncomment in __main__:</span>
+<span class="cl">HSVTuner</span>(cam_cfg.index, cam_cfg.backend, <span class="st">"color_config.json"</span>).<span class="fn">run</span>()
+    </div>
+
+    <h3>3. Measure your camera offset</h3>
+    <p>Physically measure the distance from the camera lens to the robot base origin and set <code>cam_offset_x/y/z</code> in <code>RobotConfig</code>. Save to <code>robot_config.json</code>.</p>
+
+    <h3>4. Run in dry-run mode</h3>
+    <div class="code-block">
+pipeline <span class="op">=</span> <span class="cl">VisionPipeline</span>(
+    cam_cfg   <span class="op">=</span> <span class="cl">CameraConfig</span>.<span class="fn">from_json</span>(<span class="st">"camera_config.json"</span>),
+    robot_cfg <span class="op">=</span> <span class="cl">RobotConfig</span>.<span class="fn">from_json</span>(<span class="st">"robot_config.json"</span>),
+    color_cfg <span class="op">=</span> <span class="cl">ColorConfig</span>.<span class="fn">from_json</span>(<span class="st">"color_config.json"</span>),
+    log_path  <span class="op">=</span> <span class="st">"detections.csv"</span>,
+    send_robot<span class="op">=</span><span class="kw">False</span>,     <span class="cm"># ← safe: prints [DRY-RUN] only</span>
+)
+pipeline.<span class="fn">run</span>()
+    </div>
+
+    <h3>5. Enable robot transmission</h3>
+    <p>Once the dry-run output looks correct, flip <code>send_robot=True</code>. Verify your workspace limits are conservative before doing so.</p>
+  </section>
+
+</main>
+</div>
+
+</body>
+</html>

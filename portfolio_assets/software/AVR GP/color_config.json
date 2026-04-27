@@ -1,0 +1,10 @@
+{
+  "lower_h": 6,
+  "lower_s": 165,
+  "lower_v": 167,
+  "upper_h": 35,
+  "upper_s": 255,
+  "upper_v": 255,
+  "min_area": 1500,
+  "kernel_size": 7
+}

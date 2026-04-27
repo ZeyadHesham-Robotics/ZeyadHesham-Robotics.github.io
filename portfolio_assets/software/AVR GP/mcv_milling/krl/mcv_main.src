@@ -1,0 +1,97 @@
+&ACCESS RVP
+&REL 3
+&PARAM DISKPATH = KRC:\R1\Program\MCV
+DEF mcv_main()
+  ; ============================================
+  ; MCV Fiber Milling - Main Program
+  ; Robot: KUKA KR120 R2100
+  ; Communication: EKI (Ethernet KUKA Interface)
+  ; ============================================
+  ;
+  ; Process:
+  ; 1. Wait for operator start signal
+  ; 2. Move to capture position
+  ; 3. PC vision system detects ArUco tags
+  ; 4. PC sends corrected $BASE via EKI
+  ; 5. Execute milling program with corrected base
+  ; 6. Return home, repeat
+  ;
+  ; EKI Commands handled by ekiCommHandler:
+  ;   setbasedata   - Set $BASE[1] for workpiece
+  ;   gotojointpos  - Move to capture position
+  ;   getcurrentpos - Read TCP position for calibration
+  ;   getbasedata   - Read current $BASE
+  ;
+  ; ============================================
+
+  DECL E6AXIS capture_pos
+  DECL INT cycle_count
+
+  BAS(#INITMOV, 0)
+  BAS(#VEL_PTP, 20)
+  BAS(#ACC_PTP, 50)
+
+  $VEL.CP = 0.5
+  $ACC.CP = 1.0
+
+  cycle_count = 0
+
+  ; Define capture position (robot axes for camera view)
+  ; These MUST match the Django settings capture_joint_pos
+  capture_pos = {A1 0, A2 -90, A3 90, A4 0, A5 0, A6 0, E1 0, E2 0, E3 0, E4 0, E5 0, E6 0}
+
+  ; Home first
+  PTP $AXIS_ACT
+  PTP XHOME
+
+  LOOP
+    ; ── Step 1: Wait for operator ──
+    MsgNotify("MCV: Ready for next cycle. Place part and press START")
+    WAIT FOR $IN[1]    ; Digital input 1 = operator start button
+    WAIT SEC 0.5       ; Debounce
+
+    cycle_count = cycle_count + 1
+    MsgNotify("MCV: Cycle #" + cycle_count)
+
+    ; ── Step 2: Move to capture position ──
+    ; PC may also send gotojointpos command instead
+    PTP capture_pos
+    WAIT SEC 1.0       ; Let vibrations settle
+
+    ; ── Step 3: Wait for PC vision correction ──
+    ; The ekiCommHandler.sub runs in background
+    ; PC will:
+    ;   1. Read robot position via getcurrentpos
+    ;   2. Capture camera frame and detect ArUco tags
+    ;   3. Compute $BASE correction
+    ;   4. Send setbasedata command
+    ;
+    ; After setbasedata, $BASE[1] is updated
+    MsgNotify("MCV: Waiting for vision calibration...")
+    WAIT SEC 3.0       ; Give PC time to process
+
+    ; Verify base was updated
+    MsgNotify("MCV: BASE X=" + $BASE.X)
+
+    ; ── Step 4: Execute milling program ──
+    ; The CAM program runs relative to $BASE[1]
+    MsgNotify("MCV: Starting milling...")
+
+    ; Call the milling subprogram
+    ; IMPORTANT: The actual CAM .src file from EncyCAM
+    ; must be loaded on the controller
+    ; mcv_milling()
+
+    MsgNotify("MCV: Milling complete")
+
+    ; ── Step 5: Return home ──
+    PTP XHOME
+    WAIT SEC 0.5
+
+    ; Reset start signal
+    WAIT FOR NOT $IN[1]
+
+    MsgNotify("MCV: Cycle #" + cycle_count + " complete")
+  ENDLOOP
+
+END

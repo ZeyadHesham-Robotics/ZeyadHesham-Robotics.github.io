@@ -1,0 +1,134 @@
+&ACCESS RVP
+&REL 11
+&PARAM SensorITMASK = *
+&PARAM TEMPLATE = c:\KRC\Roboter\Template\vorgabe
+&PARAM DISKPATH = KRC:\R1\Program
+def ekiMain( )
+;Copyright (C) 2020 KUKA Robotics Corporation
+;fold Disclaimer
+; This sample code is provided as is and any express or implied warranties, 
+; including the implied warranties of merchantability and fitness
+; for a particular purpose are disclaimed. In no event shall KUKA or contributors
+; be liable for any direct, indirect, incidental, special, exemplary, or consequential
+; damages (including, but not limited to, procurement of substitute goods or services;
+; loss of use, data, or profits; or business interruption) sustained by you or a third
+; party, however caused and on any theory of liability, whether in contract, strict 
+; liability, or tort arising in any way out of the use of this sample code, even if 
+; advised of the possibility of such damage.
+;endfold
+  int i
+  decl eki_status ret
+  e6pos testPos
+  e6axis tempAxis
+  frame tempFrame
+  
+  bas (#INITMOV, 0)
+  bas (#BASE, 10)
+  bas (#TOOL, 1 )
+ ptp $axis_act
+ ptp xhome
+  loop
+    wait for commandAvailable 
+    
+    ; execute the command
+    switch syncCmdData.ekiCmd
+       ;fold MOTION COMMANDS
+       case #PTP_TO_JOINT
+         ptp syncCmdData.jointVal
+         wait sec 0
+         ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+         
+       case #PTP_TO_CART
+         ptp syncCmdData.cartVal
+         wait sec 0
+         ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+         
+       case #PTP_TO_FRAME
+         tempFrame = syncCmdData.cartVal
+         ptp tempFrame
+         wait sec 0
+         ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+          
+          ; add here
+          
+          ; add here
+          
+           ;endfold
+           
+        ;fold SET COMMANDS     
+        case #SET_TOOL_DATA
+          $tool = syncCmdData.cartVal
+          wait sec 0
+          ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+          
+        case #SET_BASE_DATA
+          $base = syncCmdData.cartVal
+          wait sec 0
+          ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+        
+        case #SET_LOAD_DATA
+          $load.m = syncCmdData.RealVal
+          $load.cm.x = syncCmdData.cartVal.x
+          $load.cm.y = syncCmdData.cartVal.y
+          $load.cm.z = syncCmdData.cartVal.z
+          $load.cm.a = syncCmdData.cartVal.a
+          $load.cm.b = syncCmdData.cartVal.b
+          $load.cm.c = syncCmdData.cartVal.c
+          $load.j.x = syncCmdData.cartVal.e1
+          $load.j.y = syncCmdData.cartVal.e2
+          $load.j.z = syncCmdData.cartVal.e3           
+          ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+
+        case #SET_JOINT_SPEED
+          if ((syncCmdData.realVal < 0.0) or (syncCmdData.realVal > 100.0)) then
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiInvalidValue[])
+          else 
+            for i = 1 to 6
+              $VEL_AXIS[i] = syncCmdData.realVal
+            endfor
+            $VEL_EXTAX[1] = syncCmdData.realVal
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+          endif
+          
+        case #SET_CART_SPEED
+          if ((syncCmdData.realVal < 0.0) or (syncCmdData.realVal > $VEL_MA.CP)) then
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiInvalidValue[])
+          else 
+            $VEL.CP = syncCmdData.realVal
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+          endif
+          
+        case #SET_JOINT_ACCEL
+          if ((syncCmdData.realVal < 0.0) or (syncCmdData.realVal > 100.0)) then
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiInvalidValue[])
+          else 
+            for i = 1 to 6
+              $ACC_AXIS[i] = syncCmdData.realVal
+            endfor
+            $ACC_EXTAX[1] = syncCmdData.realVal
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiSuccess[])
+          endif
+          
+        case #SET_CART_ACCEL
+          if ((syncCmdData.realVal < 0.0) or (syncCmdData.realVal > $ACC_MA.CP)) then
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, ekiInvalidValue[], syncCmdData.cmdName[])
+          else 
+            $ACC.CP = syncCmdData.realVal
+            ret = SendString(ekiConfigFile[], syncCmdData.cmdId, ekiSuccess[], syncCmdData.cmdName[])
+          endif
+        ;endfold
+        
+        ;fold GET COMMANDS
+        case #GET_RUNMODE
+          ret = SendProgRunMode(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[])
+          
+        ;endfold
+      default
+        ret = SendString(ekiConfigFile[], syncCmdData.cmdId, syncCmdData.cmdName[], ekiInvalidCmd[])
+        
+        ; add here
+    endswitch
+    wait sec 0
+    commandAvailable = false ;
+  endloop
+end

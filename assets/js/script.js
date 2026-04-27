@@ -5,15 +5,14 @@
      - Core skills list
      - Category filters
      - Project cards (grid)
-     - Project modal (opens on card click)
+     - Project modal (opens on card click) with media gallery carousel
      - Hero stats and the copyright year
 
-   You usually shouldn't need to edit this file — edit data.js instead
+   You usually shouldn't need to edit this file - edit data.js instead
    to change content. Edit this if you want to change rendering behavior
    or add new interactive features.
    ===================================================================== */
 
-/* ───── HTML-escape helper ───── */
 function esc(s) {
     return String(s).replace(/[&<>"']/g, ch => ({
         '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -139,56 +138,164 @@ function renderProjects(filter = "all") {
     });
 }
 
-/* ───── Modal ───── */
-const backdrop = document.getElementById("modal-backdrop");
-const modalImage = document.getElementById("modal-image");
-const modalEmoji = document.getElementById("modal-emoji");
-const modalTitle = document.getElementById("modal-title");
-const modalMeta = document.getElementById("modal-meta");
-const modalDescription = document.getElementById("modal-description");
-const modalDetailWrap = document.getElementById("modal-detail-wrap");
-const modalAchWrap = document.getElementById("modal-achievements-wrap");
-const modalAch = document.getElementById("modal-achievements");
-const modalTech = document.getElementById("modal-tech");
-const modalLinks = document.getElementById("modal-links");
-const modalClose = document.getElementById("modal-close");
+
+/* ───── Modal (media gallery: images + video) ───── */
+const backdrop              = document.getElementById("modal-backdrop");
+const modalMedia            = document.getElementById("modal-media");
+const modalMediaStage       = document.getElementById("modal-media-stage");
+const modalMediaPrev        = document.getElementById("modal-media-prev");
+const modalMediaNext        = document.getElementById("modal-media-next");
+const modalMediaCounter     = document.getElementById("modal-media-counter");
+const modalMediaDots        = document.getElementById("modal-media-dots");
+const modalTitle            = document.getElementById("modal-title");
+const modalMeta             = document.getElementById("modal-meta");
+const modalDescription      = document.getElementById("modal-description");
+const modalDetailWrap       = document.getElementById("modal-detail-wrap");
+const modalAchWrap          = document.getElementById("modal-achievements-wrap");
+const modalAch              = document.getElementById("modal-achievements");
+const modalTech             = document.getElementById("modal-tech");
+const modalLinks            = document.getElementById("modal-links");
+const modalClose            = document.getElementById("modal-close");
 const modalBreadcrumbCategory = document.getElementById("modal-breadcrumb-category");
 
-let lastFocused = null;
+let lastFocused         = null;
+let currentGallery      = [];
+let currentGalleryIndex = 0;
+
+/* Derive the gallery array for a project, with backward-compat fallback. */
+function deriveGallery(project) {
+    if (Array.isArray(project.gallery) && project.gallery.length > 0) {
+        return project.gallery.filter(m => m && m.src && (m.type === "image" || m.type === "video"));
+    }
+    if (project.image) {
+        return [{ type: "image", src: project.image, caption: project.title }];
+    }
+    return [];
+}
+
+function stopAllVideos() {
+    modalMediaStage.querySelectorAll("video").forEach(v => {
+        try { v.pause(); v.currentTime = 0; } catch (_) { /* ignore */ }
+    });
+}
+
+/* Render a single media item (image or video) into the stage. */
+function renderMediaItem(item, project) {
+    stopAllVideos();
+    modalMediaStage.innerHTML = "";
+
+    if (!item) {
+        modalMedia.classList.remove("has-media");
+        const span = document.createElement("span");
+        span.className = "modal-media-emoji";
+        span.textContent = getCategoryEmoji(project.category);
+        modalMediaStage.appendChild(span);
+        return;
+    }
+
+    modalMedia.classList.add("has-media");
+
+    if (item.type === "image") {
+        const img = document.createElement("img");
+        img.src = item.src;
+        img.alt = item.caption || project.title;
+        img.loading = "lazy";
+        img.onerror = () => {
+            modalMedia.classList.remove("has-media");
+            modalMediaStage.innerHTML = "";
+            const span = document.createElement("span");
+            span.className = "modal-media-emoji";
+            span.textContent = getCategoryEmoji(project.category);
+            modalMediaStage.appendChild(span);
+        };
+        modalMediaStage.appendChild(img);
+    } else if (item.type === "video") {
+        const video = document.createElement("video");
+        video.src = item.src;
+        video.controls = true;
+        video.playsInline = true;
+        video.preload = "metadata";
+        if (item.poster) video.poster = item.poster;
+        video.onerror = () => {
+            modalMedia.classList.remove("has-media");
+            modalMediaStage.innerHTML = "";
+            const span = document.createElement("span");
+            span.className = "modal-media-emoji";
+            span.textContent = getCategoryEmoji(project.category);
+            modalMediaStage.appendChild(span);
+        };
+        modalMediaStage.appendChild(video);
+    }
+
+    if (item.caption) {
+        const cap = document.createElement("div");
+        cap.className = "modal-media-caption";
+        cap.textContent = item.caption;
+        modalMediaStage.appendChild(cap);
+    }
+}
+
+function updateGalleryUI(project) {
+    const total = currentGallery.length;
+    const multi = total > 1;
+
+    modalMediaPrev.hidden    = !multi;
+    modalMediaNext.hidden    = !multi;
+    modalMediaCounter.hidden = !multi;
+    modalMediaDots.hidden    = !multi;
+
+    if (multi) {
+        modalMediaCounter.textContent = pad(currentGalleryIndex + 1) + " / " + pad(total);
+        modalMediaDots.innerHTML = "";
+        currentGallery.forEach((_, i) => {
+            const dot = document.createElement("button");
+            dot.type = "button";
+            dot.className = "modal-media-dot" + (i === currentGalleryIndex ? " active" : "");
+            dot.setAttribute("role", "tab");
+            dot.setAttribute("aria-selected", i === currentGalleryIndex ? "true" : "false");
+            dot.setAttribute("aria-label", "Go to media " + (i + 1));
+            dot.addEventListener("click", () => {
+                currentGalleryIndex = i;
+                renderMediaItem(currentGallery[i], project);
+                updateGalleryUI(project);
+            });
+            modalMediaDots.appendChild(dot);
+        });
+    }
+}
+
+function goToGalleryIndex(i, project) {
+    if (!currentGallery.length) return;
+    const total = currentGallery.length;
+    currentGalleryIndex = ((i % total) + total) % total;
+    renderMediaItem(currentGallery[currentGalleryIndex], project);
+    updateGalleryUI(project);
+}
 
 function openModal(project) {
     const statusInfo = statusConfig[project.status] || statusConfig.completed;
 
-    // Image
-    modalImage.querySelectorAll("img").forEach(n => n.remove());
-    modalImage.classList.remove("has-photo");
-    modalEmoji.style.display = "";
-    if (project.image) {
-        const img = document.createElement("img");
-        img.src = project.image;
-        img.alt = project.title;
-        img.onerror = () => {
-            modalImage.classList.remove("has-photo");
-            img.remove();
-            modalEmoji.style.display = "";
-        };
-        modalImage.classList.add("has-photo");
-        modalEmoji.style.display = "none";
-        modalImage.insertBefore(img, modalImage.firstChild);
+    currentGallery = deriveGallery(project);
+    currentGalleryIndex = 0;
+    if (currentGallery.length === 0) {
+        renderMediaItem(null, project);
     } else {
-        modalEmoji.textContent = getCategoryEmoji(project.category);
+        renderMediaItem(currentGallery[0], project);
     }
+    updateGalleryUI(project);
+
+    modalMediaPrev.onclick = () => goToGalleryIndex(currentGalleryIndex - 1, project);
+    modalMediaNext.onclick = () => goToGalleryIndex(currentGalleryIndex + 1, project);
 
     modalTitle.textContent = project.title;
     modalDescription.textContent = project.description;
     modalBreadcrumbCategory.textContent = getCategoryName(project.category).toLowerCase();
 
-    modalMeta.innerHTML = `
-        <span class="tag tag-category">${esc(getCategoryName(project.category))}</span>
-        <span class="tag ${statusInfo.class}">${statusInfo.label}</span>
-        <span class="tag" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);">${esc(project.year)}</span>
-        <span class="tag" style="background:transparent;color:var(--text-dim);border:1px solid var(--border);">${esc(project.slug)}</span>
-    `;
+    modalMeta.innerHTML =
+        '<span class="tag tag-category">' + esc(getCategoryName(project.category)) + '</span>' +
+        '<span class="tag ' + statusInfo.class + '">' + statusInfo.label + '</span>' +
+        '<span class="tag" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);">' + esc(project.year) + '</span>' +
+        '<span class="tag" style="background:transparent;color:var(--text-dim);border:1px solid var(--border);">' + esc(project.slug) + '</span>';
 
     if (project.detail) {
         modalDetailWrap.textContent = project.detail;
@@ -198,13 +305,13 @@ function openModal(project) {
     }
 
     if (project.achievements && project.achievements.length) {
-        modalAch.innerHTML = project.achievements.map(a => `<li>${esc(a)}</li>`).join("");
+        modalAch.innerHTML = project.achievements.map(a => "<li>" + esc(a) + "</li>").join("");
         modalAchWrap.hidden = false;
     } else {
         modalAchWrap.hidden = true;
     }
 
-    modalTech.innerHTML = project.techStack.map(t => `<span class="tech-tag">${esc(t)}</span>`).join("");
+    modalTech.innerHTML = project.techStack.map(t => '<span class="tech-tag">' + esc(t) + '</span>').join("");
 
     const repo = project.links && project.links.repository;
     const demo = project.links && project.links.demo;
@@ -212,11 +319,10 @@ function openModal(project) {
 
     if (repo || demo || docs) {
         modalLinks.className = "modal-links";
-        modalLinks.innerHTML = `
-            ${repo ? `<a href="${esc(repo)}" target="_blank" rel="noopener" class="btn btn-primary">↗ Repository</a>` : ''}
-            ${demo ? `<a href="${esc(demo)}" target="_blank" rel="noopener" class="btn btn-ghost">▶ Demo</a>` : ''}
-            ${docs ? `<a href="${esc(docs)}" target="_blank" rel="noopener" class="btn btn-ghost">📄 Docs</a>` : ''}
-        `;
+        modalLinks.innerHTML =
+            (repo ? '<a href="' + esc(repo) + '" target="_blank" rel="noopener" class="btn btn-primary">\u2197 Repository</a>' : "") +
+            (demo ? '<a href="' + esc(demo) + '" target="_blank" rel="noopener" class="btn btn-ghost">\u25B6 Demo</a>' : "") +
+            (docs ? '<a href="' + esc(docs) + '" target="_blank" rel="noopener" class="btn btn-ghost">\uD83D\uDCC4 Docs</a>' : "");
     } else {
         modalLinks.className = "modal-links-empty";
         modalLinks.innerHTML = "// no public links available yet";
@@ -230,6 +336,7 @@ function openModal(project) {
 }
 
 function closeModal() {
+    stopAllVideos();
     backdrop.classList.remove("open");
     backdrop.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
@@ -239,8 +346,27 @@ function closeModal() {
 modalClose.addEventListener("click", closeModal);
 backdrop.addEventListener("click", e => { if (e.target === backdrop) closeModal(); });
 document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && backdrop.classList.contains("open")) closeModal();
+    if (!backdrop.classList.contains("open")) return;
+    if (e.key === "Escape") closeModal();
+    else if (e.key === "ArrowLeft"  && currentGallery.length > 1) modalMediaPrev.click();
+    else if (e.key === "ArrowRight" && currentGallery.length > 1) modalMediaNext.click();
 });
+
+/* Touch swipe (mobile) for the media gallery */
+let touchStartX = null;
+modalMediaStage.addEventListener("touchstart", e => {
+    if (e.touches.length === 1) touchStartX = e.touches[0].clientX;
+}, { passive: true });
+modalMediaStage.addEventListener("touchend", e => {
+    if (touchStartX === null || currentGallery.length < 2) { touchStartX = null; return; }
+    const endX = e.changedTouches[0] ? e.changedTouches[0].clientX : touchStartX;
+    const dx = endX - touchStartX;
+    if (Math.abs(dx) > 40) {
+        if (dx < 0) modalMediaNext.click();
+        else        modalMediaPrev.click();
+    }
+    touchStartX = null;
+}, { passive: true });
 
 /* ───── Stats ───── */
 document.getElementById("stat-projects").textContent = pad(PROJECTS.length);

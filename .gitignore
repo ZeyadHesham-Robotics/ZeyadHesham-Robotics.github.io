@@ -6,3 +6,6 @@
 *.swp
 .DS_Store
 Thumbs.db
+
+# Private application materials (emails, drafts) — never push
+private/

@@ -11,11 +11,10 @@
      7. Filter chips
      8. Project cards
      9. Footer
-    10. Modal
+    10. Modal (media gallery: images + video + dots + nav)
     11. Animations & motion
     12. Responsive
    ===================================================================== */
-
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -795,30 +794,43 @@ footer {
 
 .modal-backdrop.open .modal { transform: translateY(0) scale(1); }
 
-.modal-image {
+/* ───── Modal media (gallery carousel) ─────
+   Supports multiple images + an optional video per project.
+   Navigation: prev/next buttons, clickable dots, keyboard arrows,
+   and touch swipe on mobile. See script.js → deriveGallery(). */
+.modal-media {
     width: 100%;
-    height: 260px;
+    height: 320px;
     background: linear-gradient(135deg, var(--bg-elevated), var(--bg-card));
     border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     font-size: 4rem;
     color: var(--text-muted);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     position: relative;
     overflow: hidden;
+    user-select: none;
 }
 
-.modal-image.has-photo { background: #000; }
+.modal-media.has-media { background: #000; }
 
-.modal-image.has-photo img {
+.modal-media-stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-media-stage img,
+.modal-media-stage video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    background: #000;
+    display: block;
 }
 
-.modal-image:not(.has-photo)::before {
+.modal-media:not(.has-media) .modal-media-stage::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -828,7 +840,7 @@ footer {
     background-size: 32px 32px;
 }
 
-.modal-image:not(.has-photo)::after {
+.modal-media:not(.has-media) .modal-media-stage::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -836,9 +848,120 @@ footer {
     opacity: 0.5;
 }
 
-.modal-image > *:not(img):not(button) {
+.modal-media-emoji {
     position: relative;
     z-index: 1;
+    font-size: 4rem;
+}
+
+/* Prev / next navigation */
+.modal-media-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    background: rgba(7, 9, 15, 0.75);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1.5rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: all 0.15s ease;
+    z-index: 3;
+    padding: 0;
+}
+.modal-media-nav:hover {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    transform: translateY(-50%) scale(1.05);
+}
+.modal-media-nav:active { transform: translateY(-50%) scale(0.97); }
+.modal-media-nav[hidden] { display: none; }
+.modal-media-prev { left: 0.85rem; }
+.modal-media-next { right: 0.85rem; }
+
+/* Counter chip (top-left) */
+.modal-media-counter {
+    position: absolute;
+    top: 0.9rem;
+    left: 0.9rem;
+    background: rgba(7, 9, 15, 0.8);
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 3;
+}
+.modal-media-counter[hidden] { display: none; }
+
+/* Dots (bottom-center) */
+.modal-media-dots {
+    position: absolute;
+    bottom: 0.85rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 0.5rem;
+    z-index: 3;
+    padding: 0.4rem 0.75rem;
+    background: rgba(7, 9, 15, 0.7);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+.modal-media-dots[hidden] { display: none; }
+
+.modal-media-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+.modal-media-dot:hover { background: var(--text-muted); }
+.modal-media-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    transform: scale(1.15);
+}
+
+/* Optional caption overlay (shown if media item has a caption) */
+.modal-media-caption {
+    position: absolute;
+    right: 0.9rem;
+    bottom: 0.9rem;
+    max-width: 60%;
+    background: rgba(7, 9, 15, 0.82);
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    padding: 0.35rem 0.65rem;
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 3;
+    pointer-events: none;
+    line-height: 1.4;
 }
 
 .modal-close {
@@ -992,7 +1115,8 @@ footer {
     .section-caption { margin-left: 0; flex-basis: 100%; }
     .projects-grid { grid-template-columns: 1fr; }
     .modal-body { padding: 1.25rem 1.25rem 1.5rem; }
-    .modal-image { height: 180px; font-size: 3rem; }
+    .modal-media { height: 200px; font-size: 3rem; }
+    .modal-media-nav { width: 2.25rem; height: 2.25rem; font-size: 1.25rem; }
     .footer-content { justify-content: center; text-align: center; }
     .hero-stats { gap: 1.5rem; padding: 1rem 0; }
     .stat-value { font-size: 1.25rem; }

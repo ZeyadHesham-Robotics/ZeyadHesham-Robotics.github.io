@@ -1,0 +1,150 @@
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Offline Power Monitor</title>
+    <style>
+      body { background:#000; color:#0f0; font-family:monospace; text-align:center; margin:0; padding:0;}
+      canvas { background:#111; margin:10px; border-radius:8px; }
+      .btn { background:#0f0; color:#000; padding:8px 16px; border:none; border-radius:4px; cursor:pointer; margin-top:10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Power Monitor</h1>
+    <canvas id="gaugeVolt" width="200" height="150"></canvas>
+    <canvas id="gaugeCurr" width="200" height="150"></canvas>
+    <canvas id="gaugePower" width="200" height="150"></canvas>
+    <div class="chart-container">
+      <canvas id="chart" width="600" height="200"></canvas>
+    </div>
+    <button class="btn" onclick="downloadCSV()">Download CSV</button>
+
+    <script>
+      function drawGauge(canvasId, value, max, label) {
+        const c = document.getElementById(canvasId), ctx = c.getContext('2d');
+        const w = c.width, h = c.height;
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, w, h);
+        ctx.clip();
+
+        // Draw arc frame
+        ctx.strokeStyle = '#0f0';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(w/2, h - 10, w/2.2, Math.PI, 0, false);
+        ctx.stroke();
+
+        // Tick marks and labels
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#0f0';
+        for (let i = 0; i <= 10; i++) {
+          const angle = Math.PI - (i / 10) * Math.PI;
+          const r = w / 2.2;
+          const x1 = w/2 + Math.cos(angle) * (r - 5);
+          const y1 = h - 10 + Math.sin(angle) * (r - 5);
+          const x2 = w/2 + Math.cos(angle) * r;
+          const y2 = h - 10 + Math.sin(angle) * r;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+
+          const v = Math.round((i / 10) * max);
+          const lx = w/2 + Math.cos(angle) * (r - 20);
+          const ly = h - 10 + Math.sin(angle) * (r - 20);
+          ctx.fillText(v.toString(), lx - 8, ly + 4);
+        }
+
+        // Needle
+        const angle = Math.PI - (value / max) * Math.PI;
+        const nx = w/2 + Math.cos(angle) * (w/2.2 - 20);
+        const ny = h - 10 + Math.sin(angle) * (w/2.2 - 20);
+        ctx.strokeStyle = '#f00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(w/2, h - 10);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+
+        // Label and value
+        ctx.fillStyle = '#0f0';
+        ctx.font = '14px monospace';
+        ctx.fillText(label, w/2 - ctx.measureText(label).width/2, 20);
+
+        ctx.font = '16px monospace';
+        const valText = value.toFixed(1) + (label === 'Vol' ? ' V' : label === 'Cur' ? ' A' : ' W');
+        ctx.fillText(valText, w/2 - ctx.measureText(valText).width/2, h - 45);
+
+        ctx.restore();
+      }
+
+      const times = [], powers = [];
+
+      function drawChart() {
+        const c = document.getElementById('chart'), ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, c.width, c.height);
+
+        const maxP = Math.max(...powers, 1);
+
+        // Grid lines and labels
+        ctx.strokeStyle = '#222';
+        ctx.fillStyle = '#0f0';
+        ctx.lineWidth = 1;
+        ctx.font = '10px monospace';
+        for (let i = 0; i <= 4; i++) {
+          const y = (i / 4) * (c.height - 20) + 10;
+          ctx.beginPath();
+          ctx.moveTo(40, y);
+          ctx.lineTo(c.width, y);
+          ctx.stroke();
+
+          const label = Math.round(maxP - (i / 4) * maxP);
+          ctx.fillText(label.toString(), 5, y + 4);
+        }
+
+        // Power line
+        ctx.strokeStyle = '#0f0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < powers.length; i++) {
+          const x = (i / (powers.length - 1)) * (c.width - 50) + 40;
+          const y = c.height - ((powers[i] / maxP) * (c.height - 20) + 10);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      const logData = [];
+
+      function fetchData() {
+        fetch('/data').then(r => r.json()).then(d => {
+          drawGauge('gaugeVolt', d.voltage, 250, 'Vol');
+          drawGauge('gaugeCurr', d.current, 50, 'Cur');
+          drawGauge('gaugePower', d.power, 12500, 'Pow');
+          const t = new Date().toLocaleTimeString();
+          times.push(t); powers.push(d.power);
+          if (times.length > 100) { times.shift(); powers.shift(); }
+          logData.push({time: t, ...d});
+          drawChart();
+        }).catch(e => console.error(e));
+      }
+
+      function downloadCSV() {
+        let csv = 'time,voltage,current,power\n';
+        logData.forEach(r => csv += `${r.time},${r.voltage},${r.current},${r.power}\n`);
+        const b = new Blob([csv], {type:'text/csv'});
+        const url = URL.createObjectURL(b);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'power_log.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      setInterval(fetchData, 1000);
+      fetchData();
+    </script>
+  </body>
+  </html>

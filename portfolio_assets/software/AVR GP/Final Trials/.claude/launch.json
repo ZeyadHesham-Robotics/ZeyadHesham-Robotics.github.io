@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vision-gui-v4",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["KUKA_Cube_CV_V4.py"],
+      "port": 0
+    },
+    {
+      "name": "vision-gui-v3",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["KUKA_Cube_CV_V3.py"],
+      "port": 0
+    },
+    {
+      "name": "eki-controller",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["test_eki_motion.py"],
+      "port": 0
+    },
+    {
+      "name": "eki-test",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["EkiManagerTest.py"],
+      "port": 0
+    }
+  ]
+}

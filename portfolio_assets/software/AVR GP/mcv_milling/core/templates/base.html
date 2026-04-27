@@ -1,0 +1,188 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MCV Milling{% endblock %} | MCV Vision</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+</head>
+<body>
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <nav class="sidebar d-flex flex-column p-3">
+            <div class="sidebar-brand mb-4">
+                <h5 class="text-orange mb-0"><i class="bi bi-gear-wide-connected"></i> MCV</h5>
+                <small class="text-muted">Fiber Milling Vision</small>
+            </div>
+            <ul class="nav flex-column">
+                <li class="nav-section-header">Overview</li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'dashboard' %}">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                </li>
+
+                <li class="nav-section-header">Operations</li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/calibration/' %}active{% endif %}" href="{% url 'calibration' %}">
+                        <i class="bi bi-crosshair"></i> Calibration
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/jobs/' %}active{% endif %}" href="{% url 'jobs' %}">
+                        <i class="bi bi-file-earmark-code"></i> Jobs
+                    </a>
+                </li>
+
+                <li class="nav-section-header">Vision</li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/camera-calibration/' %}active{% endif %}" href="{% url 'camera_calibration' %}">
+                        <i class="bi bi-camera"></i> Camera Cal
+                    </a>
+                </li>
+
+                <li class="nav-section-header">System</li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/settings/' %}active{% endif %}" href="{% url 'settings' %}">
+                        <i class="bi bi-sliders"></i> Settings
+                    </a>
+                </li>
+            </ul>
+            <div class="mt-auto">
+                <div id="sidebar-status" class="small">
+                    <span id="robot-indicator" class="status-dot bg-danger"></span>
+                    <span id="robot-status-text" class="text-muted">Disconnected</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main content -->
+        <main class="main-content flex-grow-1">
+            <div class="top-bar d-flex justify-content-between align-items-center px-4 py-2">
+                <h4 class="mb-0">{% block page_title %}Dashboard{% endblock %}</h4>
+                <div class="d-flex align-items-center gap-3">
+                    <button class="btn btn-sm btn-outline-secondary" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                        <i class="bi bi-sun" id="theme-icon"></i>
+                    </button>
+                    <span id="topbar-robot" class="badge bg-secondary">
+                        <i class="bi bi-robot"></i> <span id="robot-name">--</span>
+                    </span>
+                    <span id="topbar-connection" class="badge bg-danger">Disconnected</span>
+                    <span id="topbar-user" class="d-none">
+                        <span class="badge bg-secondary"><i class="bi bi-person-circle"></i> <span id="topbar-username"></span></span>
+                        <button class="btn btn-sm btn-outline-secondary ms-1" onclick="doLogout()" title="Logout">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </button>
+                    </span>
+                </div>
+            </div>
+            <div class="content-area p-4">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="{% static 'js/websocket.js' %}"></script>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container" style="z-index: 9999;"></div>
+
+    <script>
+    // ── Notification Toast System ───────────────────────────────
+    function showToast(message, level='info') {
+        const icons = {info: 'bi-info-circle', success: 'bi-check-circle', warning: 'bi-exclamation-triangle', error: 'bi-x-circle'};
+        const bgColors = {info: 'bg-info', success: 'bg-success', warning: 'bg-warning', error: 'bg-danger'};
+        const textColors = {warning: 'text-dark'};
+        const tc = document.getElementById('toast-container');
+        const id = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = id;
+        toast.className = `toast align-items-center ${bgColors[level] || 'bg-secondary'} ${textColors[level] || 'text-white'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body"><i class="bi ${icons[level] || 'bi-info-circle'} me-1"></i> ${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>`;
+        tc.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast, {autohide: true, delay: level === 'error' ? 6000 : 3000});
+        bsToast.show();
+        toast.addEventListener('hidden.bs.toast', () => toast.remove());
+    }
+
+    // ── Dark/Light Theme Toggle ─────────────────────────────────
+    function toggleTheme() {
+        const html = document.documentElement;
+        const current = html.getAttribute('data-bs-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-bs-theme', next);
+        document.getElementById('theme-icon').className = next === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+        localStorage.setItem('mcv-theme', next);
+    }
+
+    // Restore theme from localStorage
+    (function() {
+        const saved = localStorage.getItem('mcv-theme');
+        if (saved) {
+            document.documentElement.setAttribute('data-bs-theme', saved);
+            const icon = document.getElementById('theme-icon');
+            if (icon) icon.className = saved === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+        }
+    })();
+
+    // ── User Info ────────────────────────────────────────────
+    fetch('/api/auth/user/')
+    .then(r => r.json())
+    .then(data => {
+        if (data.authenticated) {
+            document.getElementById('topbar-user').classList.remove('d-none');
+            document.getElementById('topbar-username').textContent = data.username;
+        }
+    })
+    .catch(() => {});
+
+    function doLogout() {
+        fetch('/api/auth/logout/', {method: 'POST'})
+        .then(() => { window.location.href = '/login/'; })
+        .catch(() => { window.location.href = '/login/'; });
+    }
+
+    // ── Robot Status (HTTP poll — works without WebSocket) ────
+    function pollRobotStatus() {
+        fetch('/api/robot/status/')
+        .then(r => r.json())
+        .then(data => {
+            const indicator = document.getElementById('robot-indicator');
+            const statusText = document.getElementById('robot-status-text');
+            const topbar = document.getElementById('topbar-connection');
+            if (data.connected) {
+                if (indicator) indicator.className = 'status-dot bg-success';
+                if (statusText) statusText.textContent = 'Connected';
+                if (topbar) { topbar.className = 'badge bg-success'; topbar.textContent = 'Connected'; }
+                if (data.info && data.info.name) {
+                    const rn = document.getElementById('robot-name');
+                    if (rn) rn.textContent = data.info.name;
+                }
+            } else {
+                if (indicator) indicator.className = 'status-dot bg-danger';
+                if (statusText) statusText.textContent = 'Disconnected';
+                if (topbar) { topbar.className = 'badge bg-danger'; topbar.textContent = 'Disconnected'; }
+            }
+        })
+        .catch(() => {});
+    }
+    // Check immediately on page load, then every 5s
+    pollRobotStatus();
+    setInterval(pollRobotStatus, 5000);
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

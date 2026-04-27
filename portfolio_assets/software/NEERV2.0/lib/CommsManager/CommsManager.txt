@@ -1,0 +1,219 @@
+#include "../../include/config.h"
+#include "CommsManager.h"
+
+ComManager comManager;
+
+// ---------- GSM Config ----------
+const char apn[] = "internet.vodafone.net";
+const char gprsUser[] = "";
+const char gprsPass[] = "";
+
+// ---------- HiveMQ MQTT Config ----------
+// const char *mqtt_server = "023df8eba3dd4d669d18f1c8bf579ede.s1.eu.hivemq.cloud";
+// const int mqtt_port = 8883;
+// const char *mqtt_user = "zero0";
+// const char *mqtt_password = "xAVg@xEX7NG996w";
+// const char *mqtt_topic = "devices/ESP-mee6crvh-9D88C8";
+// const char *mqtt_clientid = "ESP-mee6crvh-9D88C8"; // Must be unique
+
+const char *relay1Topic = "data/relay1";
+const char *relay2Topic = "data/relay2";
+
+const char *mqtt_server = "bd1b75c8082040e2bd0f255e73f81959.s1.eu.hivemq.cloud";
+const int mqtt_port = 8883;
+const char *mqtt_user = "SoilManager";
+const char *mqtt_password = "Soilmanager1";
+const char *mqtt_topic = "zeyad/soil";
+const char *mqtt_clientid = "soil_sensor_01"; // Must be unique
+
+// ---------- WiFi + GSM Clients ----------
+
+// ---------- MQTT Callback ----------
+void callback(char *topic, byte *message, unsigned int length)
+{
+    Serial.print("Message arrived [");
+    Serial.print(topic);
+    Serial.print("] ");
+    for (int i = 0; i < length; i++)
+    {
+        Serial.print((char)message[i]);
+    }
+    Serial.println();
+}
+
+ComManager::ComManager()
+    : lastHttpSend(0),
+      myPhoneNumber("+201098877930"),
+      
+{
+    Serial.println("ComManager constructor called");
+}
+
+// ---------- Init ----------
+void CommInit()
+{
+    Serial.begin(9600);
+    Serial.println("Initializing CommsManager...");
+    comManager.begin(9600);
+    comManager.connectWiFi();
+    wifiSecureClient.setInsecure(); // Disable SSL certificate verification for simplicity
+    wifiMqttClient.setServer(mqtt_server, mqtt_port);
+    wifiMqttClient.setCallback(callback);
+    // Link MQTT callback
+
+    // Subscribe to both topics
+
+    Serial.println("CommsManager initialized");
+}
+
+void ComManager::begin(long gsmBaudRate)
+{
+    gsmSerial.begin(gsmBaudRate, SERIAL_8N1, GSM_RX, GSM_TX);
+    delay(1000);
+    modem.restart();
+    Serial.println("GSM modem Initialized with baud rate: " + String(gsmBaudRate));
+    while (!modem.isNetworkConnected())
+    {
+        Serial.print(".");
+        delay(100);
+    }
+    Serial.println("\nNetwork connected!");
+}
+
+bool ComManager::connectWiFi()
+{
+    if (WiFi.status() == WL_CONNECTED)
+        return true;
+
+    Serial.printf("Connecting to WiFi SSID: %s\n", wifiSSID.c_str());
+    WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str());
+
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 10000)
+    {
+        Serial.print(".");
+        delay(100);
+    }
+    Serial.println();
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        Serial.println("WiFi connected.");
+        wifiMqttClient.setServer(mqtt_server, mqtt_port);
+        return true;
+    }
+    else
+    {
+        Serial.println("WiFi connection failed.");
+        return false;
+    }
+}
+
+bool reconnect()
+{
+    while (!wifiMqttClient.connected())
+    {
+        Serial.print("Attempting MQTT connection...");
+        // Try connecting with client ID, username, and password
+        if (wifiMqttClient.connect(mqtt_clientid, mqtt_user, mqtt_password))
+        {
+            Serial.println("connected");
+            wifiMqttClient.subscribe(mqtt_topic);
+            Serial.print("Subscribed to: ");
+            Serial.println(mqtt_topic);
+        }
+        else
+        {
+            Serial.print("failed, rc=");
+            Serial.print(wifiMqttClient.state());
+            Serial.println(" retrying in 5 seconds");
+            delay(5000);
+        }
+    }
+}
+
+// ---------- Main loop ----------
+void ComManager::loop(const SensorData &data)
+{
+    static enum { WIFI_SEND,
+                  GSM_SEND } state = WIFI_SEND;
+
+    switch (state)
+    {
+    case WIFI_SEND:
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            wifiMqttClient.loop();
+            if (!wifiMqttClient.connected())
+            {
+                if (!reconnect())
+                {
+                    Serial.println("WiFi MQTT failed, switching to GSM");
+                    state = GSM_SEND;
+                    break;
+                }
+            }
+            publishSensorDataMQTT(wifiMqttClient, data);
+            state = WIFI_SEND; // stay in WiFi mode
+        }
+        else
+        {
+            Serial.println("WiFi not available, switching to GSM");
+            state = GSM_SEND;
+        }
+        break;
+
+        // GSM_SEND can be re-enabled if you want fallback
+    }
+}
+
+void ComManager::publishSensorDataMQTT(PubSubClient &client, const SensorData &data)
+{
+    // Safely format values into strings
+    String soilTempStr = String(data.soilTempC, 2);
+    String airTempStr = String(data.airTempC, 2);
+    String airHumStr = String(data.airHumidity, 2);
+    String soilPhStr = String(data.soilPH, 2);
+    String soilMoistStr = String(data.soilMoisture);
+    String soilECStr = String(data.soilEC);
+    String nitrogenStr = String(data.nitrogen);
+    String phosphorusStr = String(data.phosphorus);
+    String potassiumStr = String(data.potassium);
+    String battVoltStr = String(data.batteryVoltage, 2);
+    String timestampStr = String(data.timestamp);
+    String doorOpenStr = data.doorOpen ? "true" : "false";
+
+    // Publish them safely
+    client.publish("farm/soilTemp", soilTempStr.c_str());
+    client.publish("farm/airTemp", airTempStr.c_str());
+    client.publish("farm/airHumidity", airHumStr.c_str());
+    client.publish("farm/soilPH", soilPhStr.c_str());
+    client.publish("farm/soilMoisture", soilMoistStr.c_str());
+    client.publish("farm/soilEC", soilECStr.c_str());
+    client.publish("farm/nitrogen", nitrogenStr.c_str());
+    client.publish("farm/phosphorus", phosphorusStr.c_str());
+    client.publish("farm/potassium", potassiumStr.c_str());
+    client.publish("farm/batteryVoltage", battVoltStr.c_str());
+    client.publish("farm/timestamp", timestampStr.c_str());
+    client.publish("farm/doorOpen", doorOpenStr.c_str());
+    Serial.println("Sensor data published to MQTT.");
+}
+
+String ComManager::buildJsonFromSensorData(const SensorData &data)
+{
+    String json = "{";
+    json += "\"soilTempC\":" + String(data.soilTempC, 2) + ",";
+    json += "\"airTempC\":" + String(data.airTempC, 2) + ",";
+    json += "\"airHumidity\":" + String(data.airHumidity, 2) + ",";
+    json += "\"soilPH\":" + String(data.soilPH, 2) + ",";
+    json += "\"soilMoisture\":" + String(data.soilMoisture, 2) + ",";
+    json += "\"soilEC\":" + String(data.soilEC, 2) + ",";
+    json += "\"nitrogen\":" + String(data.nitrogen, 2) + ",";
+    json += "\"phosphorus\":" + String(data.phosphorus, 2) + ",";
+    json += "\"potassium\":" + String(data.potassium, 2) + ",";
+    json += "\"batteryVoltage\":" + String(data.batteryVoltage, 2) + ",";
+    json += "\"doorOpen\":" + String(data.doorOpen ? "true" : "false") + ",";
+    json += "\"timestamp\":\"" + data.timestamp + "\"";
+    json += "}";
+    return json;
+}

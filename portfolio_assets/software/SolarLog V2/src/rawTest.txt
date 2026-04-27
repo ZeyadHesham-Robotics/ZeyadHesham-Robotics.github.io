@@ -1,0 +1,76 @@
+#include "SensorsManager.h"
+#include "Connectivity.h"
+
+void readMuxChannelFromSerial();
+
+void setup()
+{
+  Serial.begin(9600);
+  Sensors_Initialize();
+}
+
+void loop()
+{
+  PanelReading reading;
+  readMuxChannelFromSerial();
+  delay(100); // allow MUX & ADC input to settle
+  Serial.print("Raw ADC: ");
+  Serial.println(analogRead(MUX_Signal));
+  // for (int x = 0; x < 4; ++x)
+  // {
+  //   if (readPanelData(x, reading))
+  //   {
+  //     Serial.print("Panel ");
+  //     Serial.print(x);
+  //     Serial.print(" Voltage: ");
+  //     Serial.print(reading.voltage);
+  //     Serial.print(" V, Current: ");
+  //     Serial.print(reading.current);
+  //     Serial.print(" A, Temperature: ");
+  //     Serial.print(reading.temperature);
+  //     Serial.println(" °C");
+  //   }
+  //   else
+  //   {
+  //     Serial.println("Failed to read panel data.");
+  //   }
+  //   delay(100); // Wait for 5 seconds before next reading
+  // }
+}
+
+void readMuxChannelFromSerial()
+{
+  static char buf[8];
+  static uint8_t len = 0;
+
+  while (Serial.available())
+  {
+    char c = (char)Serial.read();
+    if (c == '\r')
+      continue; // ignore CR
+    if (c == '\n')
+    { // end of line
+      buf[len] = '\0';
+      // trim leading spaces
+      char *s = buf;
+      while (*s == ' ' || *s == '\t')
+        ++s;
+
+      if (s[0] >= '0' && s[0] <= '7' && s[1] == '\0')
+      {
+        uint8_t ch = (uint8_t)(s[0] - '0');
+        MUX_Select(ch); // <-- implement this for your hardware
+        Serial.print("MUX set to ");
+        Serial.println(ch);
+      }
+      else
+      {
+        Serial.println("Invalid. Enter a single digit 0..7.");
+      }
+      len = 0; // reset buffer
+      return;  // process one command per call
+    }
+    if (len < sizeof(buf) - 1)
+      buf[len++] = c;
+  }
+}

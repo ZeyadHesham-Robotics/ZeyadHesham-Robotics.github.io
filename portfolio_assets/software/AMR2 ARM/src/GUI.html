@@ -1,0 +1,44 @@
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arm Control GUI</title>
+    <style>
+        body { font-family: Arial; text-align: center; }
+        button { width: 150px; height: 50px; margin: 10px; font-size: 18px; }
+        .row { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>ESP32 Arm Control</h1>
+    <form method="post">
+        <div class="row">
+            <button name="cmd" value="Enable Arm">Enable Arm</button>
+            <button name="cmd" value="Disable Arm">Disable Arm</button>
+        </div>
+        <div class="row">
+            <button name="cmd" value="Base +">Base +</button>
+            <button name="cmd" value="Base -">Base -</button>
+        </div>
+        <div class="row">s
+            <button name="cmd" value="Shoulder +">Shoulder +</button>
+            <button name="cmd" value="Shoulder -">Shoulder -</button>
+        </div>
+        <div class="row">
+            <button name="cmd" value="Elbow +">Elbow +</button>
+            <button name="cmd" value="Elbow -">Elbow -</button>
+        </div>
+        <div class="row">
+            <button name="cmd" value="Gripper Open">Gripper Open</button>
+            <button name="cmd" value="Gripper Close">Gripper Close</button>
+        </div>
+    </form>
+    {% if response %}
+    <div>
+        <h3>ESP32 Response:</h3>
+        <pre>{{ response }}</pre>
+    </div>
+    {% endif %}
+</body>
+</html>
+"""

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hot Wire — MQTT Live</title>
+  <!-- libs -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { background:#0f172a; color:#e5e7eb; font-family:system-ui,Arial,sans-serif; margin:0; }
+    .container { max-width:600px; margin:32px auto; padding:0 16px; }
+    h1 { font-size:22px; margin-bottom:16px; }
+    .card { background:#111827; border-radius:14px; padding:18px; margin-bottom:18px; box-shadow:0 10px 30px rgba(0,0,0,.2);}
+    label { font-size:13px; color:#94a3b8; display:block; margin:8px 0 4px;}
+    input { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;}
+    button { border:0; padding:10px 14px; border-radius:10px; background:#38bdf8; color:#06202b; font-weight:700; cursor:pointer; margin-right:8px;}
+    .status { font-variant-numeric: tabular-nums; }
+    table { width:100%; border-collapse:collapse; margin-top:10px;}
+    th, td { text-align:left; padding:10px; border-bottom:1px solid #1f2937;}
+    .muted { color:#94a3b8; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#0b1220; border:1px solid #1f2937;}
+    pre { background:#0b1220; border:1px solid #1f2937; padding:10px; border-radius:10px; max-height:200px; overflow:auto;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Hot Wire — MQTT Live</h1>
+    <div class="card">
+      <label>Broker Host (WSS)</label>
+      <input id="host" value="bd1b75c8082040e2bd0f255e73f81959.s1.eu.hivemq.cloud" />
+      <label>Port</label>
+      <input id="port" type="number" value="8884" />
+      <label>WS Path</label>
+      <input id="path" value="/mqtt" />
+      <label>Client ID (web)</label>
+      <input id="clientId" value="esp32-hotwire-web" />
+      <label>Username</label>
+      <input id="username" value="Hotwire" />
+      <label>Password</label>
+      <input id="password" type="password" value="Hotwire1" />
+      <label>Subscribe Topic</label>
+      <input id="subTopic" value="hotwire/esp32-hotwire/data" />
+      <div style="margin-top:12px;">
+        <button id="btnConnect">Connect</button>
+        <button id="btnDisconnect">Disconnect</button>
+        <span class="status" id="status">Disconnected</span>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <div>
+          <div class="muted">Connection</div>
+          <div id="connState" class="pill">disconnected</div>
+        </div>
+        <div>
+          <div class="muted">Last message</div>
+          <div id="lastMsg" class="pill">—</div>
+        </div>
+        <div>
+          <div class="muted">Last error</div>
+          <div id="lastErr" class="pill">—</div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>PWM</th>
+            <th>Temperature (°C)</th>
+            <th>Current (A)</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="pwmVal" class="muted">—</td>
+            <td id="tempVal" class="muted">—</td>
+            <td id="currVal" class="muted">—</td>
+            <td id="updVal" class="muted">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button id="btnStartLog">Start logging</button>
+        <button id="btnStopLog">Stop</button>
+        <button id="btnDownload">Download CSV</button>
+        <input id="csvName" placeholder="hotwire_log.csv" style="max-width:240px;" />
+        <span class="muted" id="logCount">0 rows</span>
+      </div>
+      <small class="muted">Logs rows like: timestamp, pwm, temperature, current</small>
+    </div>
+    <div class="card">
+      <label for="setPwm">Set PWM (0-2048)</label>
+      <input id="setPwm" type="number" min="0" max="2048" value="0" style="max-width:120px;" />
+      <button id="btnSendPwm">Send PWM</button>
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px;">Log</div>
+      <pre id="log"></pre>
+    </div>
+  </div>
+<script>
+(function(){
+  'use strict';
+  // --- helpers ---
+  const $ = (id)=>document.getElementById(id);
+  const logEl = $('log');
+  function log(msg){
+    const time = new Date().toLocaleTimeString();
+    logEl.textContent += `[${time}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // --- logging ---
+  let logging = false;
+  const logRows = []; // [tsISO, pwm, temp, current]
+  $('btnStartLog').addEventListener('click', function(){ logging = true; log('Logging: ON'); });
+  $('btnStopLog').addEventListener('click', function(){ logging = false; log('Logging: OFF'); });
+  $('btnDownload').addEventListener('click', function(){
+    if (!logRows.length){ log('No data to download.'); return; }
+    const header = 'timestamp,pwm,temperature,current\n';
+    const body = logRows.map(function(r){ return r.join(','); }).join('\n');
+    const csv = header + body + '\n';
+    const name = $('csvName').value.trim() || 'hotwire_log.csv';
+    const blob = new Blob([csv], {type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // --- MQTT ---
+  let client = null;
+  let lastSentPwm = null;
+  function setState(s){
+    $('status').textContent = s;
+    $('connState').textContent = s;
+  }
+
+  function connect(){
+    const host = $('host').value.trim();
+    let port = Number($('port').value.trim());
+    const path = $('path').value.trim() || '/mqtt';
+    const clientId = $('clientId').value.trim();
+    const username = $('username').value.trim();
+    const password = $('password').value;
+    const sub = $('subTopic').value.trim();
+
+    if (username && !password) { log('Password is required when username is set.'); $('lastErr').textContent='Missing password'; return; }
+    if (port === 8883) { log('Port 8883 is TCP TLS (not WebSockets). Switching to 8884 for WSS.'); port = 8884; $('port').value = '8884'; }
+
+    const url = `wss://${host}:${port}${path}`;
+    log(`Connecting to ${url} as ${clientId} ...`);
+
+    const opts = {
+      clientId: clientId,
+      username: username || undefined,
+      password: password || undefined,
+      keepalive: 30,
+      clean: true,
+      reconnectPeriod: 2000,
+      connectTimeout: 10000,
+      protocolVersion: 4
+    };
+
+    try {
+      client = mqtt.connect(url, opts);
+    } catch(e){
+      $('lastErr').textContent = (e && e.message) ? e.message : 'connect() threw';
+      log('connect() error: ' + (e && e.message ? e.message : String(e)));
+      return;
+    }
+
+    setState('connecting');
+
+    client.on('connect', function(connack){
+      setState('connected');
+      $('lastErr').textContent = '—';
+      var rc = connack && (connack.returnCode !== undefined ? connack.returnCode : connack.reasonCode);
+      if (rc !== undefined) log('CONNACK rc=' + rc);
+      log('Connected. Subscribing to ' + sub);
+      client.subscribe(sub, function(err){ if (err) { $('lastErr').textContent = err.message; log('Subscribe error: ' + err.message); } });
+    });
+
+    client.on('reconnect', function(){ setState('reconnecting'); });
+    client.on('close', function(){ setState('disconnected'); });
+    client.on('error', function(e){ $('lastErr').textContent = (e && e.message) ? e.message : 'error'; log('Error: ' + (e && e.message ? e.message : String(e))); });
+
+    client.on('packetreceive', function(pkt){
+      if (pkt && pkt.cmd === 'connack') {
+        var rc2 = (pkt.returnCode !== undefined ? pkt.returnCode : pkt.reasonCode);
+        if (rc2 !== 0) { $('lastErr').textContent = 'CONNACK rc=' + rc2; log('CONNACK non-zero rc=' + rc2); }
+      }
+    });
+
+    client.on('message', function(topic, payloadBuf){
+      const payloadStr = payloadBuf.toString();
+      $('lastMsg').textContent = new Date().toLocaleTimeString();
+      try {
+        const data = JSON.parse(payloadStr);
+        // Adapted for: {"pwm":123,"temperature":45.67,"current":2.34}
+        if (typeof data.pwm === 'number' && typeof data.temperature === 'number' && typeof data.current === 'number') {
+          $('pwmVal').textContent = data.pwm;
+          $('tempVal').textContent = data.temperature.toFixed(2);
+          $('currVal').textContent = data.current.toFixed(3);
+          $('updVal').textContent = new Date().toLocaleTimeString();
+          if (logging) {
+            const ts = new Date().toISOString();
+            logRows.push([ts, data.pwm, data.temperature.toFixed(2), data.current.toFixed(3)]);
+            $('logCount').textContent = `${logRows.length} rows`;
+          }
+        }
+      } catch(e){
+        log('Non-JSON or parse error on ' + topic + ': ' + payloadStr);
+      }
+    });
+  }
+
+  function disconnect(){
+    if (client){ client.end(true); client = null; setState('disconnected'); log('Disconnected.'); }
+  }
+
+  // Send PWM value to ESP32 via MQTT, only if changed
+  $('btnSendPwm').addEventListener('click', function(){
+    let pwm = parseInt($('setPwm').value, 10);
+    if (isNaN(pwm) || pwm < 0 || pwm > 2048) { log('PWM must be 0-2048'); return; }
+    if (pwm === lastSentPwm) {
+      log('PWM value unchanged, not sent.');
+      return;
+    }
+    if (!client || client.disconnected) { log('Not connected to MQTT broker.'); return; }
+    client.publish('hotwire/esp32-hotwire/set_pwm', String(pwm), { qos: 0, retain: true });
+    lastSentPwm = pwm;
+    log('Sent PWM value to ESP32: ' + pwm);
+  });
+
+  $('btnConnect').addEventListener('click', connect);
+  $('btnDisconnect').addEventListener('click', disconnect);
+})();
+</script>
+</body>
+</html>

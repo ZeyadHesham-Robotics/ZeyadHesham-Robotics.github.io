@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Solar Panels — MQTT Live</title>
+  <!-- libs -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --ok:#22c55e; --bad:#ef4444; --accent:#38bdf8; }
+    html,body { height:100%; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial; background:var(--bg); color:#e5e7eb; }
+    .container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .card { background:var(--card); border-radius:14px; padding:14px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+    .grow { flex:1 1 320px; }
+    label { font-size:12px; color:var(--muted); display:block; margin: 8px 0 4px; }
+    input, select { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb; }
+    input::placeholder { color:#64748b; }
+    button { border:0; padding:10px 14px; border-radius:10px; background:var(--accent); color:#06202b; font-weight:700; cursor:pointer; }
+    button.secondary { background:#1f2937; color:#e5e7eb; }
+    .status { font-variant-numeric: tabular-nums; }
+    table { width:100%; border-collapse: collapse; margin-top:10px; }
+    th, td { text-align:left; padding:10px; border-bottom:1px solid #1f2937; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size: 12px; background:#0b1220; border:1px solid #1f2937; }
+    pre { background:#0b1220; border:1px solid #1f2937; padding:10px; border-radius:10px; max-height:200px; overflow:auto; }
+    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width:700px){ .grid-2 { grid-template-columns: 1fr; } }
+    .charts { display:grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap:12px; }
+    @media (max-width:900px){ .charts { grid-template-columns: 1fr; } }
+    .chart-card { background:var(--card); border-radius:14px; padding:14px; }
+    .chart-card h3 { margin:0 0 8px; font-size:14px; color:#cbd5e1; }
+    .chart-wrap { position:relative; height:240px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Solar Panels — MQTT Live</h1>
+
+    <div class="row">
+      <div class="card grow">
+        <div class="grid-2">
+          <div>
+            <label>Broker Host (WSS)</label>
+            <input id="host" placeholder="e.g. 830e6d9f89504070a296bc58ca55abda.s1.eu.hivemq.cloud" />
+          </div>
+          <div>
+            <label>Port</label>
+            <input id="port" type="number" placeholder="8884" />
+          </div>
+          <div>
+            <label>WS Path</label>
+            <input id="path" placeholder="/mqtt" />
+          </div>
+          <div>
+            <label>Client ID (web)</label>
+            <input id="clientId" />
+          </div>
+          <div>
+            <label>Username</label>
+            <input id="username" placeholder="(optional)" />
+          </div>
+          <div>
+            <label>Password</label>
+            <input id="password" type="password" placeholder="(optional)" />
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px; align-items:center; flex-wrap: wrap;">
+          <button id="btnConnect">Connect</button>
+          <button id="btnDisconnect" class="secondary">Disconnect</button>
+          <button id="btnTestPublic" class="secondary">Test public broker</button>
+          <span class="status" id="status">Disconnected</span>
+        </div>
+        <div style="margin-top:8px;">
+          <label>Subscribe Topic</label>
+          <input id="subTopic" placeholder="solar/esp32-solar/panel/+" />
+          <small class="muted">Tip: device publishes one packet per panel to <code>solar/&lt;DEVICE_ID&gt;/panel/&lt;0..3&gt;</code></small>
+        </div>
+      </div>
+
+      <div class="card grow">
+        <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap: wrap;">
+          <div>
+            <div class="muted">Connection</div>
+            <div id="connState" class="pill">disconnected</div>
+          </div>
+          <div>
+            <div class="muted">Last message</div>
+            <div id="lastMsg" class="pill">—</div>
+          </div>
+          <div>
+            <div class="muted">Last error</div>
+            <div id="lastErr" class="pill">—</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Panel</th><th>Voltage (V)</th><th>Current (A)</th><th>Power (W)</th><th>Temp (°C)</th><th>Updated</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
+        <button id="btnStartLog">Start logging</button>
+        <button id="btnStopLog" class="secondary">Stop</button>
+        <button id="btnDownload" class="secondary">Download CSV</button>
+        <input id="csvName" placeholder="solar_log.csv" style="max-width:240px;" />
+        <span class="muted" id="logCount">0 rows</span>
+      </div>
+      <small class="muted">Logs rows like: timestamp, panel, voltage, current, power, temp</small>
+    </div>
+
+    <div class="charts" style="margin-top:12px;">
+      <div class="chart-card"><h3>Panel P0</h3><div class="chart-wrap"><canvas id="chart0"></canvas></div></div>
+      <div class="chart-card"><h3>Panel P1</h3><div class="chart-wrap"><canvas id="chart1"></canvas></div></div>
+      <div class="chart-card"><h3>Panel P2</h3><div class="chart-wrap"><canvas id="chart2"></canvas></div></div>
+      <div class="chart-card"><h3>Panel P3</h3><div class="chart-wrap"><canvas id="chart3"></canvas></div></div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div class="muted" style="margin-bottom:6px;">Log</div>
+      <pre id="log"></pre>
+    </div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+  // --- helpers ---
+  const $ = (id)=>document.getElementById(id);
+  const logEl = $('log');
+  function log(msg){
+    const time = new Date().toLocaleTimeString();
+    logEl.textContent += `[${time}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function save(){
+    const data = {
+      host: $('host').value.trim(),
+      port: $('port').value.trim(),
+      path: $('path').value.trim(),
+      clientId: $('clientId').value.trim(),
+      username: $('username').value,
+      subTopic: $('subTopic').value
+    };
+    try { localStorage.setItem('mqtt-settings', JSON.stringify(data)); } catch(e) {}
+  }
+  function load(){
+    const defId = `esp32-solar-web-${Math.random().toString(16).slice(2,6)}`;
+    let s = {};
+    try { s = JSON.parse(localStorage.getItem('mqtt-settings') || '{}'); } catch(e) {}
+    $('host').value = s.host || '830e6d9f89504070a296bc58ca55abda.s1.eu.hivemq.cloud';
+    $('port').value = s.port || '8884';
+    $('path').value = s.path || '/mqtt';
+    $('clientId').value = s.clientId || defId;
+    $('username').value = s.username || 'SolarLog';
+    $('password').value = '';
+    $('subTopic').value = s.subTopic || 'solar/esp32-solar/panel/+';
+  }
+  load();
+
+  // --- table ---
+  const rowsEl = $('rows');
+  function ensureRows(){
+    rowsEl.innerHTML = '';
+    for(let i=0;i<4;i++){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>P${i}</td>
+        <td id="v${i}" class="muted">—</td>
+        <td id="i${i}" class="muted">—</td>
+        <td id="p${i}" class="muted">—</td>
+        <td id="t${i}" class="muted">—</td>
+        <td id="u${i}" class="muted">—</td>`;
+      rowsEl.appendChild(tr);
+    }
+  }
+  ensureRows();
+
+  // --- logging + charts ---
+  let logging = false;
+  const logRows = []; // [tsISO, idx, v, i, p, t]
+  const MAX_POINTS = 300;
+  const charts = [];
+
+  function initCharts(){
+    for (let i=0;i<4;i++){
+      const ctx = document.getElementById('chart'+i).getContext('2d');
+      charts[i] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {label:'Voltage (V)', yAxisID:'yV', data: [], pointRadius:0, borderWidth:2, tension:0.2},
+            {label:'Current (A)', yAxisID:'yI', data: [], pointRadius:0, borderWidth:2, tension:0.2},
+            {label:'Power (W)',   yAxisID:'yP', data: [], pointRadius:0, borderWidth:2, tension:0.2}
+          ]
+        },
+        options: {
+          animation: false,
+          parsing: false,
+          plugins: { legend: { labels: { color:'#e5e7eb' } } },
+          scales: {
+            x: { type:'time', time:{ unit:'second' }, ticks:{ color:'#94a3b8' }, grid:{ color:'#1f2937' } },
+            yV:{ position:'left', ticks:{ color:'#94a3b8' }, grid:{ color:'#1f2937' } },
+            yI:{ position:'right', ticks:{ color:'#94a3b8' }, grid:{ drawOnChartArea:false } },
+            yP:{ position:'right', display:false }
+          }
+        }
+      });
+    }
+  }
+  initCharts();
+
+  function updateChart(idx, v, i, p){
+    const t = Date.now();
+    const c = charts[idx];
+    if (!c) return;
+    const dv = c.data.datasets[0].data;
+    const di = c.data.datasets[1].data;
+    const dp = c.data.datasets[2].data;
+    dv.push({x:t, y:v});
+    di.push({x:t, y:i});
+    dp.push({x:t, y:p});
+    if (dv.length>MAX_POINTS){ dv.shift(); di.shift(); dp.shift(); }
+    c.update('none');
+  }
+
+  function addLogRow(idx, v, i, p, temp){
+    if (!logging) return;
+    const ts = new Date();
+    logRows.push([ts.toISOString(), idx, v, i, p, Number.isFinite(temp)?temp:'']);
+    $('logCount').textContent = `${logRows.length} rows`;
+  }
+
+  // --- MQTT ---
+  let client = null;
+  function setState(s){
+    $('status').textContent = s;
+    $('connState').textContent = s;
+  }
+
+  function connect(){
+    save();
+    const host = $('host').value.trim();
+    let port = Number($('port').value.trim());
+    const path = $('path').value.trim() || '/mqtt';
+    const clientId = $('clientId').value.trim();
+    const username = $('username').value.trim();
+    const password = $('password').value;
+    const sub = $('subTopic').value.trim();
+
+    if (username && !password) { log('Password is required when username is set.'); $('lastErr').textContent='Missing password'; return; }
+    if (port === 8883) { log('Port 8883 is TCP TLS (not WebSockets). Switching to 8884 for WSS.'); port = 8884; $('port').value = '8884'; }
+
+    const url = `wss://${host}:${port}${path}`;
+    log(`Connecting to ${url} as ${clientId} ...`);
+
+    const opts = {
+      clientId: clientId,
+      username: username || undefined,
+      password: password || undefined,
+      keepalive: 30,
+      clean: true,
+      reconnectPeriod: 2000,
+      connectTimeout: 10000,
+      protocolVersion: 4
+    };
+
+    try {
+      client = mqtt.connect(url, opts);
+    } catch(e){
+      $('lastErr').textContent = (e && e.message) ? e.message : 'connect() threw';
+      log('connect() error: ' + (e && e.message ? e.message : String(e)));
+      return;
+    }
+
+    setState('connecting');
+
+    client.on('connect', function(connack){
+      setState('connected');
+      $('lastErr').textContent = '—';
+      var rc = connack && (connack.returnCode !== undefined ? connack.returnCode : connack.reasonCode);
+      if (rc !== undefined) log('CONNACK rc=' + rc);
+      log('Connected. Subscribing to ' + sub);
+      client.subscribe(sub, function(err){ if (err) { $('lastErr').textContent = err.message; log('Subscribe error: ' + err.message); } });
+    });
+
+    client.on('reconnect', function(){ setState('reconnecting'); });
+    client.on('close', function(){ setState('disconnected'); });
+    client.on('error', function(e){ $('lastErr').textContent = (e && e.message) ? e.message : 'error'; log('Error: ' + (e && e.message ? e.message : String(e))); });
+
+    client.on('packetreceive', function(pkt){
+      if (pkt && pkt.cmd === 'connack') {
+        var rc2 = (pkt.returnCode !== undefined ? pkt.returnCode : pkt.reasonCode);
+        if (rc2 !== 0) { $('lastErr').textContent = 'CONNACK rc=' + rc2; log('CONNACK non-zero rc=' + rc2); }
+      }
+    });
+
+    client.on('message', function(topic, payloadBuf){
+      const payloadStr = payloadBuf.toString();
+      $('lastMsg').textContent = new Date().toLocaleTimeString();
+      try {
+        const data = JSON.parse(payloadStr);
+        if (typeof data.idx === 'number' && typeof data.v === 'number' && typeof data.i === 'number') {
+          updateRow(data.idx, data.v, data.i, Number(data.t));
+        } else if (Array.isArray(data.panels)) {
+          for (var j=0;j<data.panels.length;j++){
+            var p = data.panels[j];
+            if (p && typeof p.v==='number' && typeof p.i==='number') updateRow(j, p.v, p.i, Number(p.t));
+          }
+        }
+      } catch(e){
+        log('Non-JSON or parse error on ' + topic + ': ' + payloadStr);
+      }
+    });
+  }
+
+  function disconnect(){
+    if (client){ client.end(true); client = null; setState('disconnected'); log('Disconnected.'); }
+  }
+
+  // buttons
+  $('btnConnect').addEventListener('click', connect);
+  $('btnDisconnect').addEventListener('click', disconnect);
+  $('btnTestPublic').addEventListener('click', function(){
+    $('host').value = 'test.mosquitto.org';
+    $('port').value = '8081';
+    $('path').value = '/mqtt';
+    $('clientId').value = 'web-' + Math.random().toString(16).slice(2,8);
+    $('username').value = '';
+    $('password').value = '';
+    $('subTopic').value = 'solar/esp32-solar/panel/+';
+    connect();
+  });
+  $('btnStartLog').addEventListener('click', function(){ logging = true; log('Logging: ON'); });
+  $('btnStopLog').addEventListener('click', function(){ logging = false; log('Logging: OFF'); });
+  $('btnDownload').addEventListener('click', function(){
+    if (!logRows.length){ log('No data to download.'); return; }
+    const header = 'timestamp,panel,voltage_v,current_a,power_w,temp_c\n';
+    const body = logRows.map(function(r){ return r.join(','); }).join('\n');
+    const csv = header + body + '\n';
+    const name = $('csvName').value.trim() || 'solar_log.csv';
+    const blob = new Blob([csv], {type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // row update
+  function updateRow(idx, v, i, t){
+    const p = (v*i);
+    document.getElementById('v'+idx).textContent = v.toFixed(3);
+    document.getElementById('i'+idx).textContent = i.toFixed(3);
+    document.getElementById('p'+idx).textContent = p.toFixed(2);
+    document.getElementById('t'+idx).textContent = Number.isFinite(t) ? t.toFixed(2) : '—';
+    document.getElementById('u'+idx).textContent = new Date().toLocaleTimeString();
+    updateChart(idx, v, i, p);
+    addLogRow(idx, v, i, p, t);
+  }
+})();
+</script>
+</body>
+</html>

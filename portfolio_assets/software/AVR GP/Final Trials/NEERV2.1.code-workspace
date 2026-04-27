@@ -1,0 +1,75 @@
+{
+  "folders": [
+	{
+		"name": "NEERV2.1",
+		"path": "../../../../../Desktop/ZAD/NEER Final/NEERV2.1/NEERV2.1/NEERV2.1"
+	},
+	{
+		"name": "WECON 32",
+		"path": "../../WECON 32"
+	},
+	{
+		"name": "Solar Datalogger",
+		"path": "../../Solar Datalogger"
+	},
+	{
+		"name": "NEMA 17x100 Test",
+		"path": "../../NEMA 17x100 Test"
+	},
+	{
+		"name": "PelletExtruder",
+		"path": "../../PelletExtruder"
+	},
+	{
+		"name": "Pellet Extruder",
+		"path": "../../Pellet Extruder"
+	},
+	{
+		"name": "Wattmeter",
+		"path": "../../Wattmeter"
+	},
+	{
+		"name": "NEERV2.0",
+		"path": "../../NEERV2.0"
+	},
+	{
+		"name": "NEERV2.1",
+		"path": "../../../../../Downloads/NEERV2.1/NEERV2.1/NEERV2.1"
+	},
+	{
+		"name": "NEER Final",
+		"path": "../../../../../Desktop/ZAD/NEER/NEER Final/NEER Final"
+	},
+	{
+		"name": "Peptide Shaker",
+		"path": "../../Peptide Shaker"
+	},
+	{
+		"name": "HotWire",
+		"path": "../../HotWire"
+	},
+	{
+		"name": "GP Test",
+		"path": "../../GP Test"
+	},
+	{
+		"name": "AVR GP",
+		"path": ".."
+	},
+	{
+		"name": "Hotwire UDP",
+		"path": "../../Hotwire UDP"
+	},
+	{
+		"name": "Thrust Analyzer - ARD",
+		"path": "../../Thrust Analyzer - ARD"
+	},
+	{
+		"name": "Thrust Analyzer",
+		"path": "../../Thrust Analyzer"
+	}
+],
+  "settings": {
+    "liveServer.settings.multiRootWorkspaceName": "GP Test"
+  }
+}

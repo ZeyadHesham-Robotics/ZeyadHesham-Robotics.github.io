@@ -1,0 +1,479 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}<i class="bi bi-speedometer2"></i> Dashboard{% endblock %}
+
+{% block content %}
+<!-- Getting Started Wizard -->
+<div class="card bg-dark border-secondary mb-3">
+    <div class="card-header border-secondary">
+        <i class="bi bi-rocket-takeoff"></i> Getting Started
+    </div>
+    <div class="card-body py-3">
+        <div class="position-relative">
+            <div class="wizard-connector">
+                <div class="wizard-connector-fill" id="wizard-progress" style="width: 0%;"></div>
+            </div>
+            <div class="wizard-stepper">
+                <a class="wizard-step" href="{% url 'settings' %}" id="wiz-step-1">
+                    <div class="wizard-step-icon"><i class="bi bi-sliders"></i></div>
+                    <div class="wizard-step-label">Configure</div>
+                    <div class="wizard-step-status" id="wiz-status-1">Checking...</div>
+                </a>
+                <a class="wizard-step" href="#" id="wiz-step-2" onclick="document.getElementById('robot-ip').focus(); return false;">
+                    <div class="wizard-step-icon"><i class="bi bi-plug"></i></div>
+                    <div class="wizard-step-label">Connect Robot</div>
+                    <div class="wizard-step-status" id="wiz-status-2">Checking...</div>
+                </a>
+                <a class="wizard-step" href="{% url 'calibration' %}" id="wiz-step-3">
+                    <div class="wizard-step-icon"><i class="bi bi-camera"></i></div>
+                    <div class="wizard-step-label">Open Camera</div>
+                    <div class="wizard-step-status" id="wiz-status-3">Checking...</div>
+                </a>
+                <a class="wizard-step" href="{% url 'calibration' %}" id="wiz-step-4">
+                    <div class="wizard-step-icon"><i class="bi bi-bullseye"></i></div>
+                    <div class="wizard-step-label">Teach Nominal</div>
+                    <div class="wizard-step-status" id="wiz-status-4">Checking...</div>
+                </a>
+                <a class="wizard-step locked" href="{% url 'calibration' %}" id="wiz-step-5">
+                    <div class="wizard-step-icon"><i class="bi bi-crosshair"></i></div>
+                    <div class="wizard-step-label">Calibrate!</div>
+                    <div class="wizard-step-status" id="wiz-status-5">Complete steps above</div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Connection Card -->
+    <div class="col-md-4">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <i class="bi bi-plug"></i> Robot Connection
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label small text-muted">IP Address</label>
+                    <input type="text" id="robot-ip" class="form-control form-control-sm bg-darker"
+                           value="{{ settings.robot_ip }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small text-muted">Port</label>
+                    <input type="number" id="robot-port" class="form-control form-control-sm bg-darker"
+                           value="{{ settings.robot_port }}">
+                </div>
+                <div class="d-grid gap-2">
+                    <button id="btn-connect" class="btn btn-success btn-sm" onclick="connectRobot()">
+                        <i class="bi bi-plug"></i> Connect
+                    </button>
+                    <button id="btn-disconnect" class="btn btn-outline-danger btn-sm" onclick="disconnectRobot()" disabled>
+                        <i class="bi bi-x-circle"></i> Disconnect
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card bg-dark border-secondary mt-3">
+            <div class="card-header border-secondary">
+                <i class="bi bi-bar-chart"></i> Statistics
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Total Cycles</span>
+                    <span class="text-orange fw-bold">{{ total_cycles }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Successful</span>
+                    <span class="text-success fw-bold">{{ success_cycles }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Active Program</span>
+                    <span class="text-info fw-bold">{{ active_program.name|default:"None" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Camera Feed -->
+    <div class="col-md-8">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-camera-video"></i> Live Camera Feed</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-success" onclick="startVideoStream()">
+                        <i class="bi bi-play-fill"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="stopVideoStream()">
+                        <i class="bi bi-stop-fill"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0 text-center">
+                <img id="video-feed" src="" class="img-fluid" style="max-height: 480px; background: #000;"
+                     alt="Camera feed - click play to start">
+                <div id="video-placeholder" class="py-5 text-muted">
+                    <i class="bi bi-camera-video-off" style="font-size: 3rem;"></i>
+                    <p>Click play to start camera feed</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Calibration History Chart -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-graph-up"></i> Calibration Correction History</span>
+                <button class="btn btn-sm btn-outline-info" onclick="loadCalChart()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="card-body" style="height: 250px;">
+                <canvas id="cal-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Log -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-journal-text"></i> Event Log</span>
+                <div>
+                    <select id="event-category-filter" class="form-select form-select-sm bg-darker d-inline-block" style="width: auto;" onchange="loadEvents()">
+                        <option value="">All Categories</option>
+                        <option value="robot">Robot</option>
+                        <option value="calibration">Calibration</option>
+                        <option value="camera">Camera</option>
+                        <option value="job">Job</option>
+                        <option value="settings">Settings</option>
+                        <option value="system">System</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary ms-1" onclick="loadEvents()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead style="position: sticky; top: 0;">
+                        <tr>
+                            <th style="width: 140px;">Time</th>
+                            <th style="width: 70px;">Level</th>
+                            <th style="width: 90px;">Category</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="event-log-body">
+                        <tr><td colspan="4" class="text-center text-muted py-3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Calibrations -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history"></i> Recent Calibrations</span>
+                <div>
+                    <a href="/api/calibration/export/csv/" class="btn btn-sm btn-outline-info me-1" title="Export CSV">
+                        <i class="bi bi-filetype-csv"></i> CSV
+                    </a>
+                    <a href="/api/calibration/export/xlsx/" class="btn btn-sm btn-outline-success" title="Export Excel">
+                        <i class="bi bi-file-earmark-excel"></i> Excel
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Status</th>
+                            <th>dX (mm)</th>
+                            <th>dY (mm)</th>
+                            <th>dZ (mm)</th>
+                            <th>dA (deg)</th>
+                            <th>dB (deg)</th>
+                            <th>dC (deg)</th>
+                            <th>Trans.</th>
+                            <th>Rot.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cal in recent_cals %}
+                        <tr>
+                            <td>{{ cal.timestamp|date:"H:i:s" }}</td>
+                            <td>
+                                {% if cal.status == 'success' %}
+                                <span class="badge bg-success">OK</span>
+                                {% elif cal.status == 'failed' %}
+                                <span class="badge bg-danger">FAIL</span>
+                                {% else %}
+                                <span class="badge bg-warning">REJ</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ cal.correction_x|floatformat:2|default:"--" }}</td>
+                            <td>{{ cal.correction_y|floatformat:2|default:"--" }}</td>
+                            <td>{{ cal.correction_z|floatformat:2|default:"--" }}</td>
+                            <td>{{ cal.correction_a|floatformat:2|default:"--" }}</td>
+                            <td>{{ cal.correction_b|floatformat:2|default:"--" }}</td>
+                            <td>{{ cal.correction_c|floatformat:2|default:"--" }}</td>
+                            <td>{{ cal.translation_mag|floatformat:1|default:"--" }}mm</td>
+                            <td>{{ cal.rotation_mag|floatformat:1|default:"--" }}deg</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="10" class="text-center text-muted py-3">No calibrations yet</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let videoWs = null;
+
+function connectRobot() {
+    const ip = document.getElementById('robot-ip').value;
+    const port = document.getElementById('robot-port').value;
+    fetch('/api/robot/connect/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip, port: parseInt(port)})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'connected') {
+            document.getElementById('btn-connect').disabled = true;
+            document.getElementById('btn-disconnect').disabled = false;
+            document.getElementById('topbar-connection').className = 'badge bg-success';
+            document.getElementById('topbar-connection').textContent = 'Connected';
+            document.getElementById('robot-indicator').className = 'status-dot bg-success';
+            document.getElementById('robot-status-text').textContent = 'Connected';
+            if (data.robot_name) {
+                document.getElementById('robot-name').textContent = data.robot_name;
+            }
+        } else {
+            alert('Connection failed: ' + (data.message || 'Unknown error'));
+        }
+    });
+}
+
+function disconnectRobot() {
+    fetch('/api/robot/disconnect/', {method: 'POST'})
+    .then(r => r.json())
+    .then(() => {
+        document.getElementById('btn-connect').disabled = false;
+        document.getElementById('btn-disconnect').disabled = true;
+        document.getElementById('topbar-connection').className = 'badge bg-danger';
+        document.getElementById('topbar-connection').textContent = 'Disconnected';
+        document.getElementById('robot-indicator').className = 'status-dot bg-danger';
+        document.getElementById('robot-status-text').textContent = 'Disconnected';
+    });
+}
+
+function startVideoStream() {
+    if (videoWs) videoWs.close();
+    const img = document.getElementById('video-feed');
+    const placeholder = document.getElementById('video-placeholder');
+    videoWs = new WebSocket(`ws://${window.location.host}/ws/video/`);
+    videoWs.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'frame') {
+            img.src = 'data:image/jpeg;base64,' + data.image;
+            img.style.display = 'block';
+            placeholder.style.display = 'none';
+        } else if (data.type === 'error') {
+            placeholder.innerHTML = '<p class="text-danger">' + data.message + '</p>';
+        }
+    };
+    videoWs.onclose = () => { videoWs = null; };
+}
+
+function stopVideoStream() {
+    if (videoWs) {
+        videoWs.send(JSON.stringify({command: 'stop'}));
+        videoWs.close();
+        videoWs = null;
+    }
+    document.getElementById('video-feed').style.display = 'none';
+    document.getElementById('video-placeholder').style.display = 'block';
+}
+
+// ── Event Log ───────────────────────────────────────────────
+function loadEvents() {
+    const category = document.getElementById('event-category-filter').value;
+    let url = '/api/events/?limit=30';
+    if (category) url += '&category=' + category;
+    fetch(url)
+    .then(r => r.json())
+    .then(data => {
+        const tbody = document.getElementById('event-log-body');
+        if (!data.events || data.events.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No events logged yet</td></tr>';
+            return;
+        }
+        const levelBadge = {
+            'info': 'bg-info', 'success': 'bg-success',
+            'warning': 'bg-warning text-dark', 'error': 'bg-danger'
+        };
+        const catIcons = {
+            'robot': 'bi-robot', 'calibration': 'bi-bullseye',
+            'camera': 'bi-camera', 'job': 'bi-file-earmark-code',
+            'settings': 'bi-sliders', 'system': 'bi-gear'
+        };
+        tbody.innerHTML = data.events.map(e => {
+            const ts = new Date(e.timestamp);
+            const timeStr = ts.toLocaleTimeString() + ' ' + ts.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+            return `<tr>
+                <td class="text-muted small">${timeStr}</td>
+                <td><span class="badge ${levelBadge[e.level] || 'bg-secondary'}">${e.level}</span></td>
+                <td><i class="bi ${catIcons[e.category] || 'bi-circle'} me-1"></i>${e.category}</td>
+                <td>${e.message}</td>
+            </tr>`;
+        }).join('');
+    });
+}
+
+// ── Calibration History Chart ────────────────────────────────
+let calChart = null;
+
+function loadCalChart() {
+    fetch('/api/calibration/history/')
+    .then(r => r.json())
+    .then(data => {
+        const records = data.records.filter(r => r.correction && r.status === 'success').reverse();
+        if (records.length === 0) return;
+
+        const labels = records.map(r => {
+            const d = new Date(r.timestamp);
+            return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        });
+
+        const datasets = [
+            {label: 'dX (mm)', data: records.map(r => r.correction.X), borderColor: '#ff6384', tension: 0.3, pointRadius: 2},
+            {label: 'dY (mm)', data: records.map(r => r.correction.Y), borderColor: '#36a2eb', tension: 0.3, pointRadius: 2},
+            {label: 'dZ (mm)', data: records.map(r => r.correction.Z), borderColor: '#4bc0c0', tension: 0.3, pointRadius: 2},
+        ];
+
+        if (calChart) calChart.destroy();
+        const ctx = document.getElementById('cal-chart').getContext('2d');
+        calChart = new Chart(ctx, {
+            type: 'line',
+            data: {labels, datasets},
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {title: {display: true, text: 'mm'}, grid: {color: '#333'}},
+                    x: {grid: {color: '#222'}},
+                },
+                plugins: {legend: {labels: {color: '#ccc'}}},
+            },
+        });
+    });
+}
+
+// Sync connect/disconnect button state on page load
+function syncConnectButtons(connected) {
+    const btnConnect = document.getElementById('btn-connect');
+    const btnDisconnect = document.getElementById('btn-disconnect');
+    if (btnConnect) btnConnect.disabled = connected;
+    if (btnDisconnect) btnDisconnect.disabled = !connected;
+}
+
+// ── Getting Started Wizard ────────────────────────────────────
+function updateWizard() {
+    let completed = 0;
+    const total = 4; // 4 prerequisite steps
+
+    function setStep(n, done, statusText) {
+        const step = document.getElementById('wiz-step-' + n);
+        const status = document.getElementById('wiz-status-' + n);
+        if (!step) return;
+        step.className = 'wizard-step' + (done ? ' completed' : '');
+        if (status) status.textContent = statusText;
+        if (done) completed++;
+    }
+
+    // Step 1: Configure — check if settings exist (always true if page loads)
+    fetch('/api/settings/')
+    .then(r => r.json())
+    .then(d => {
+        const configured = d.robot_ip && d.robot_port;
+        setStep(1, configured, configured ? 'Configured' : 'Set robot IP');
+        checkFinal();
+    })
+    .catch(() => { setStep(1, false, 'Error'); checkFinal(); });
+
+    // Step 2: Robot connected
+    fetch('/api/robot/status/')
+    .then(r => r.json())
+    .then(d => {
+        setStep(2, d.connected, d.connected ? 'Connected' : 'Not connected');
+        syncConnectButtons(d.connected);
+        checkFinal();
+    })
+    .catch(() => { setStep(2, false, 'Offline'); syncConnectButtons(false); checkFinal(); });
+
+    // Step 3: Camera open
+    fetch('/api/camera/status/')
+    .then(r => r.json())
+    .then(d => {
+        setStep(3, d.opened, d.opened ? 'Camera open' : 'Not open');
+        checkFinal();
+    })
+    .catch(() => { setStep(3, false, 'Error'); checkFinal(); });
+
+    // Step 4: Nominal taught (check hand-eye + nominal from settings)
+    fetch('/api/settings/')
+    .then(r => r.json())
+    .then(d => {
+        const taught = d.has_nominal || false;
+        setStep(4, taught, taught ? 'Taught' : 'Not taught');
+        checkFinal();
+    })
+    .catch(() => { setStep(4, false, 'Error'); checkFinal(); });
+
+    let checkCount = 0;
+    function checkFinal() {
+        checkCount++;
+        if (checkCount < total) return;
+        const step5 = document.getElementById('wiz-step-5');
+        const status5 = document.getElementById('wiz-status-5');
+        const progress = document.getElementById('wizard-progress');
+        const pct = (completed / total) * 100;
+        if (progress) progress.style.width = pct + '%';
+
+        if (completed === total) {
+            step5.className = 'wizard-step active';
+            status5.textContent = 'Ready!';
+        } else {
+            step5.className = 'wizard-step locked';
+            status5.textContent = (total - completed) + ' step(s) remaining';
+        }
+    }
+}
+
+// Load events, chart, wizard, and check robot status on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadEvents();
+    loadCalChart();
+    updateWizard();
+});
+setInterval(loadEvents, 10000);
+</script>
+{% endblock %}

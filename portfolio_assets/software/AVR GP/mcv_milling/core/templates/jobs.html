@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Jobs{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-code"></i> KRL Programs{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <!-- Upload -->
+    <div class="col-md-4">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <i class="bi bi-upload"></i> Upload KRL Program
+            </div>
+            <div class="card-body">
+                <form id="upload-form" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <label class="form-label small text-muted">.src file *</label>
+                        <input type="file" name="src_file" accept=".src" class="form-control form-control-sm bg-darker" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small text-muted">.dat file (optional)</label>
+                        <input type="file" name="dat_file" accept=".dat" class="form-control form-control-sm bg-darker">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small text-muted">Program Name</label>
+                        <input type="text" name="name" class="form-control form-control-sm bg-darker" placeholder="Auto-detect from DEF">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Description</label>
+                        <textarea name="description" class="form-control form-control-sm bg-darker" rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm w-100">
+                        <i class="bi bi-upload"></i> Upload
+                    </button>
+                </form>
+                <div id="upload-result" class="mt-2 small"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Program List -->
+    <div class="col-md-8">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <i class="bi bi-list-ul"></i> Programs
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Points</th>
+                            <th>Description</th>
+                            <th>Uploaded</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="programs-table">
+                        {% for p in programs %}
+                        <tr id="row-{{ p.id }}">
+                            <td>
+                                {% if p.is_active %}<i class="bi bi-star-fill text-warning"></i>{% endif %}
+                                {{ p.name }}
+                            </td>
+                            <td>{{ p.point_count }}</td>
+                            <td class="text-muted small">{{ p.description|truncatechars:40 }}</td>
+                            <td class="small">{{ p.uploaded_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info me-1" onclick="viewSource({{ p.id }})" title="View Source">
+                                    <i class="bi bi-code-slash"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-success me-1" onclick="activateJob({{ p.id }})" title="Activate">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="viewStats({{ p.id }})" title="Statistics">
+                                    <i class="bi bi-bar-chart"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteJob({{ p.id }})" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-3">No programs uploaded</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Execute Cycle -->
+<div class="row mt-3">
+    <div class="col-md-6">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <i class="bi bi-play-circle"></i> Execute Cycle
+            </div>
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="exec-auto-cal" checked>
+                    <label class="form-check-label small" for="exec-auto-cal">Auto-calibrate before execution</label>
+                </div>
+                <button class="btn btn-success w-100" onclick="executeCycle()">
+                    <i class="bi bi-play-fill"></i> Execute Cycle
+                </button>
+                <div id="exec-result" class="small mt-2"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6" id="stats-card" style="display:none;">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <i class="bi bi-bar-chart"></i> Program Statistics
+            </div>
+            <div class="card-body" id="stats-body"></div>
+        </div>
+    </div>
+</div>
+
+<!-- KRL Source Viewer Modal -->
+<div class="modal fade" id="sourceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="source-title">KRL Source</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="source-code" class="bg-darker p-3 rounded" style="max-height: 500px; overflow-y: auto; font-size: 0.8rem;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('upload-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const form = new FormData(this);
+    fetch('/api/jobs/upload/', { method: 'POST', body: form })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            document.getElementById('upload-result').innerHTML =
+                `<span class="text-success">Uploaded: ${d.name} (${d.point_count} points)</span>`;
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            document.getElementById('upload-result').innerHTML =
+                `<span class="text-danger">${d.message}</span>`;
+        }
+    });
+});
+
+function activateJob(id) {
+    fetch(`/api/jobs/${id}/activate/`, {method: 'POST'})
+    .then(r => r.json())
+    .then(() => location.reload());
+}
+
+function deleteJob(id) {
+    if (!confirm('Delete this program?')) return;
+    fetch(`/api/jobs/${id}/delete/`, {method: 'POST'})
+    .then(r => r.json())
+    .then(() => location.reload());
+}
+
+function viewSource(id) {
+    fetch(`/api/jobs/${id}/source/`)
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            document.getElementById('source-title').textContent = d.name + ' (' + d.point_count + ' points)';
+            // Simple KRL syntax highlighting
+            let html = highlightKRL(d.src);
+            if (d.dat) {
+                html += '\n\n<span style="color:#ff8800;">; ──── .DAT FILE ────</span>\n' + highlightKRL(d.dat);
+            }
+            document.getElementById('source-code').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('sourceModal')).show();
+        }
+    });
+}
+
+function highlightKRL(code) {
+    return code
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/(DEF|END|GLOBAL|DECL|RETURN)\b/g, '<span style="color:#ff6384;font-weight:bold;">$1</span>')
+        .replace(/\b(PTP|LIN|CIRC|SPTP|SLIN|SCIRC)\b/g, '<span style="color:#36a2eb;font-weight:bold;">$1</span>')
+        .replace(/\b(IF|THEN|ELSE|ENDIF|FOR|TO|ENDFOR|WHILE|ENDWHILE|SWITCH|CASE|ENDSWITCH|LOOP|ENDLOOP|WAIT|HALT|CONTINUE)\b/g,
+            '<span style="color:#4bc0c0;">$1</span>')
+        .replace(/(;.*$)/gm, '<span style="color:#666;">$1</span>');
+}
+
+function executeCycle() {
+    const autoCal = document.getElementById('exec-auto-cal').checked;
+    const el = document.getElementById('exec-result');
+    el.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Executing...';
+
+    fetch('/api/jobs/execute-cycle/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({auto_calibrate: autoCal})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            el.innerHTML = `<span class="text-success">Cycle #${d.cycle_number} completed (${d.duration_seconds}s)` +
+                (d.calibrated ? ' with calibration' : '') + '</span>';
+        } else {
+            el.innerHTML = `<span class="text-danger">${d.message}</span>`;
+        }
+    })
+    .catch(e => { el.innerHTML = `<span class="text-danger">Error: ${e}</span>`; });
+}
+
+function viewStats(id) {
+    fetch(`/api/jobs/${id}/statistics/`)
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            const s = d.stats;
+            document.getElementById('stats-card').style.display = 'block';
+            document.getElementById('stats-body').innerHTML = `
+                <h6 class="text-orange">${s.program_name}</h6>
+                <div class="row g-2 small">
+                    <div class="col-6"><span class="text-muted">Total Cycles:</span> <span class="fw-bold">${s.total_cycles}</span></div>
+                    <div class="col-6"><span class="text-muted">Completed:</span> <span class="text-success fw-bold">${s.completed}</span></div>
+                    <div class="col-6"><span class="text-muted">Calibrated:</span> <span class="text-info fw-bold">${s.calibrated}</span></div>
+                    <div class="col-6"><span class="text-muted">Errors:</span> <span class="text-danger fw-bold">${s.errors}</span></div>
+                    <div class="col-6"><span class="text-muted">Avg Duration:</span> <span>${s.avg_duration || '--'}s</span></div>
+                    <div class="col-6"><span class="text-muted">Min/Max:</span> <span>${s.min_duration || '--'}/${s.max_duration || '--'}s</span></div>
+                </div>
+            `;
+        }
+    });
+}
+</script>
+{% endblock %}

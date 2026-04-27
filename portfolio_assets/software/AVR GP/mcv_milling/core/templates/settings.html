@@ -1,0 +1,456 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Settings{% endblock %}
+{% block page_title %}<i class="bi bi-sliders"></i> Settings{% endblock %}
+
+{% block content %}
+<form id="settings-form">
+    <div class="row g-3">
+        <!-- Robot -->
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary"><i class="bi bi-robot"></i> Robot</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small">IP Address</label>
+                        <input type="text" name="robot_ip" class="form-control form-control-sm bg-darker" value="{{ settings.robot_ip }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Port</label>
+                        <input type="number" name="robot_port" class="form-control form-control-sm bg-darker" value="{{ settings.robot_port }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Override %</label>
+                        <input type="number" name="override_percent" class="form-control form-control-sm bg-darker" value="{{ settings.override_percent }}" min="1" max="100">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera -->
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary"><i class="bi bi-camera"></i> Camera</div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">Index</label>
+                            <input type="number" name="camera_index" class="form-control form-control-sm bg-darker" value="{{ settings.camera_index }}">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">FPS</label>
+                            <input type="number" name="camera_fps" class="form-control form-control-sm bg-darker" value="{{ settings.camera_fps }}">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">Width</label>
+                            <input type="number" name="camera_width" class="form-control form-control-sm bg-darker" value="{{ settings.camera_width }}">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">Height</label>
+                            <input type="number" name="camera_height" class="form-control form-control-sm bg-darker" value="{{ settings.camera_height }}">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">fx</label>
+                            <input type="number" step="0.1" name="camera_fx" class="form-control form-control-sm bg-darker" value="{{ settings.camera_fx }}">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">fy</label>
+                            <input type="number" step="0.1" name="camera_fy" class="form-control form-control-sm bg-darker" value="{{ settings.camera_fy }}">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">cx</label>
+                            <input type="number" step="0.1" name="camera_cx" class="form-control form-control-sm bg-darker" value="{{ settings.camera_cx }}">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">cy</label>
+                            <input type="number" step="0.1" name="camera_cy" class="form-control form-control-sm bg-darker" value="{{ settings.camera_cy }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ArUco & Safety -->
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary"><i class="bi bi-qr-code"></i> ArUco Tags</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Dictionary</label>
+                        <select name="aruco_dict_type" class="form-select form-select-sm bg-darker">
+                            {% for value, label in settings.ARUCO_DICT_CHOICES %}
+                            <option value="{{ value }}" {% if settings.aruco_dict_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Segmentation auto-detects if wrong</small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Table Tag ID</label>
+                        <input type="number" name="table_tag_id" class="form-control form-control-sm bg-darker" value="{{ settings.table_tag_id }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Part Tag ID</label>
+                        <input type="number" name="part_tag_id" class="form-control form-control-sm bg-darker" value="{{ settings.part_tag_id }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Tag Size (mm)</label>
+                        <input type="number" step="0.1" name="tag_size_mm" class="form-control form-control-sm bg-darker" value="{{ settings.tag_size_mm }}">
+                    </div>
+                    <hr class="border-secondary">
+                    <div class="mb-2">
+                        <label class="form-label small">Max Correction (mm)</label>
+                        <input type="number" step="0.1" name="max_correction_mm" class="form-control form-control-sm bg-darker" value="{{ settings.max_correction_mm }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Max Correction (deg)</label>
+                        <input type="number" step="0.1" name="max_correction_deg" class="form-control form-control-sm bg-darker" value="{{ settings.max_correction_deg }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nominal Base Frame -->
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary"><i class="bi bi-bounding-box"></i> Nominal $BASE</div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-4 mb-2">
+                            <label class="form-label small">X</label>
+                            <input type="number" step="0.001" name="nominal_base_x" class="form-control form-control-sm bg-darker" value="{{ settings.nominal_base_x }}">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small">Y</label>
+                            <input type="number" step="0.001" name="nominal_base_y" class="form-control form-control-sm bg-darker" value="{{ settings.nominal_base_y }}">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small">Z</label>
+                            <input type="number" step="0.001" name="nominal_base_z" class="form-control form-control-sm bg-darker" value="{{ settings.nominal_base_z }}">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small">A</label>
+                            <input type="number" step="0.001" name="nominal_base_a" class="form-control form-control-sm bg-darker" value="{{ settings.nominal_base_a }}">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small">B</label>
+                            <input type="number" step="0.001" name="nominal_base_b" class="form-control form-control-sm bg-darker" value="{{ settings.nominal_base_b }}">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small">C</label>
+                            <input type="number" step="0.001" name="nominal_base_c" class="form-control form-control-sm bg-darker" value="{{ settings.nominal_base_c }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hand-Eye Matrix -->
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary"><i class="bi bi-grid-3x3"></i> Hand-Eye Matrix</div>
+                <div class="card-body">
+                    <p class="text-muted small">Paste 4x4 matrix as JSON array (from hand-eye calibration):</p>
+                    <textarea id="hand-eye-input" class="form-control form-control-sm bg-darker font-monospace" rows="5"
+                              placeholder="[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]">{{ settings.hand_eye_matrix_json }}</textarea>
+                    <button type="button" class="btn btn-sm btn-outline-info mt-2" onclick="saveHandEye()">
+                        Save Hand-Eye Matrix
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <button type="submit" class="btn btn-success"><i class="bi bi-check-lg"></i> Save Settings</button>
+    </div>
+</form>
+
+<!-- Backup / Restore -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary"><i class="bi bi-cloud-download"></i> Backup & Restore</div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Download a full backup of settings, base frames, and capture positions as JSON. Restore from a previous backup file.</p>
+                <div class="d-flex gap-2">
+                    <a href="/api/settings/backup/" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-download"></i> Download Backup
+                    </a>
+                    <button class="btn btn-sm btn-outline-warning" onclick="document.getElementById('restore-file').click()">
+                        <i class="bi bi-upload"></i> Restore from File
+                    </button>
+                    <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(this)">
+                </div>
+                <div id="restore-result" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Base Frames Management -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-bounding-box-circles"></i> Base Frames</span>
+                <button class="btn btn-sm btn-outline-success" onclick="showAddBaseFrame()">
+                    <i class="bi bi-plus-lg"></i> Add Frame
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <!-- Add/Edit Form (hidden by default) -->
+                <div id="bf-form" style="display:none;" class="p-3 border-bottom border-secondary">
+                    <input type="hidden" id="bf-edit-id" value="">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label small">Name</label>
+                            <input type="text" id="bf-name" class="form-control form-control-sm bg-darker" placeholder="e.g. Workpiece A">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small">BASE #</label>
+                            <input type="number" id="bf-base-num" class="form-control form-control-sm bg-darker" value="1" min="1" max="32">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small">X</label>
+                            <input type="number" step="0.001" id="bf-x" class="form-control form-control-sm bg-darker" value="0">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small">Y</label>
+                            <input type="number" step="0.001" id="bf-y" class="form-control form-control-sm bg-darker" value="0">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small">Z</label>
+                            <input type="number" step="0.001" id="bf-z" class="form-control form-control-sm bg-darker" value="0">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small">A</label>
+                            <input type="number" step="0.001" id="bf-a" class="form-control form-control-sm bg-darker" value="0">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small">B</label>
+                            <input type="number" step="0.001" id="bf-b" class="form-control form-control-sm bg-darker" value="0">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small">C</label>
+                            <input type="number" step="0.001" id="bf-c" class="form-control form-control-sm bg-darker" value="0">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end gap-1">
+                            <button class="btn btn-sm btn-success" onclick="saveBaseFrame()">
+                                <i class="bi bi-check-lg"></i> Save
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="cancelBaseFrame()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>BASE #</th>
+                            <th>X</th><th>Y</th><th>Z</th>
+                            <th>A</th><th>B</th><th>C</th>
+                            <th>Cal Data</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bf-table-body">
+                        <tr><td colspan="10" class="text-center text-muted py-3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    const data = {};
+    fd.forEach((v, k) => { data[k] = (v === '' || isNaN(v)) ? v : Number(v); });
+    fetch('/api/settings/', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(d => { if (d.status === 'ok') alert('Settings saved!'); else alert('Error: ' + d.message); });
+});
+
+function saveHandEye() {
+    const val = document.getElementById('hand-eye-input').value;
+    try {
+        const matrix = JSON.parse(val);
+        fetch('/api/settings/', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({hand_eye_matrix: matrix})
+        })
+        .then(r => r.json())
+        .then(d => { if (d.status === 'ok') alert('Hand-eye matrix saved!'); });
+    } catch(e) { alert('Invalid JSON: ' + e.message); }
+}
+
+// ── Backup / Restore ────────────────────────────────────────
+function restoreBackup(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const resultDiv = document.getElementById('restore-result');
+    if (!confirm('Restore settings from "' + file.name + '"? This will overwrite current settings.')) {
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        fetch('/api/settings/restore/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: e.target.result
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                resultDiv.innerHTML = '<div class="alert alert-success alert-sm py-1 px-2 small">Settings restored! Reloading...</div>';
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-danger alert-sm py-1 px-2 small">Error: ' + data.message + '</div>';
+            }
+        })
+        .catch(err => {
+            resultDiv.innerHTML = '<div class="alert alert-danger alert-sm py-1 px-2 small">Upload failed: ' + err.message + '</div>';
+        });
+    };
+    reader.readAsText(file);
+    input.value = '';
+}
+
+// ── Base Frames Management ──────────────────────────────────
+function loadBaseFrames() {
+    fetch('/api/base-frames/')
+    .then(r => r.json())
+    .then(data => {
+        const tbody = document.getElementById('bf-table-body');
+        if (!data.frames || data.frames.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">No base frames configured. Click "Add Frame" to create one.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.frames.map(f => `
+            <tr class="${f.is_active ? 'table-active' : ''}">
+                <td>
+                    ${f.is_active ? '<i class="bi bi-check-circle-fill text-success me-1"></i>' : ''}
+                    <strong>${f.name}</strong>
+                </td>
+                <td>${f.base_number}</td>
+                <td>${f.X.toFixed(3)}</td><td>${f.Y.toFixed(3)}</td><td>${f.Z.toFixed(3)}</td>
+                <td>${f.A.toFixed(3)}</td><td>${f.B.toFixed(3)}</td><td>${f.C.toFixed(3)}</td>
+                <td>
+                    ${f.has_hand_eye ? '<span class="badge bg-info me-1">HE</span>' : ''}
+                    ${f.has_nominal ? '<span class="badge bg-warning me-1">NOM</span>' : ''}
+                    ${!f.has_hand_eye && !f.has_nominal ? '<span class="text-muted">--</span>' : ''}
+                </td>
+                <td>
+                    ${!f.is_active ? `<button class="btn btn-xs btn-outline-success me-1" onclick="activateBaseFrame(${f.id})" title="Activate"><i class="bi bi-check-lg"></i></button>` : ''}
+                    <button class="btn btn-xs btn-outline-info me-1" onclick="editBaseFrame(${f.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-xs btn-outline-danger" onclick="deleteBaseFrame(${f.id}, '${f.name}')" title="Delete"><i class="bi bi-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    });
+}
+
+function showAddBaseFrame() {
+    document.getElementById('bf-edit-id').value = '';
+    document.getElementById('bf-name').value = '';
+    document.getElementById('bf-base-num').value = '1';
+    ['x','y','z','a','b','c'].forEach(a => document.getElementById('bf-' + a).value = '0');
+    document.getElementById('bf-form').style.display = 'block';
+}
+
+function editBaseFrame(id) {
+    fetch('/api/base-frames/')
+    .then(r => r.json())
+    .then(data => {
+        const f = data.frames.find(fr => fr.id === id);
+        if (!f) return;
+        document.getElementById('bf-edit-id').value = f.id;
+        document.getElementById('bf-name').value = f.name;
+        document.getElementById('bf-base-num').value = f.base_number;
+        document.getElementById('bf-x').value = f.X;
+        document.getElementById('bf-y').value = f.Y;
+        document.getElementById('bf-z').value = f.Z;
+        document.getElementById('bf-a').value = f.A;
+        document.getElementById('bf-b').value = f.B;
+        document.getElementById('bf-c').value = f.C;
+        document.getElementById('bf-form').style.display = 'block';
+    });
+}
+
+function cancelBaseFrame() {
+    document.getElementById('bf-form').style.display = 'none';
+}
+
+function saveBaseFrame() {
+    const editId = document.getElementById('bf-edit-id').value;
+    const payload = {
+        name: document.getElementById('bf-name').value,
+        base_number: parseInt(document.getElementById('bf-base-num').value),
+        X: parseFloat(document.getElementById('bf-x').value) || 0,
+        Y: parseFloat(document.getElementById('bf-y').value) || 0,
+        Z: parseFloat(document.getElementById('bf-z').value) || 0,
+        A: parseFloat(document.getElementById('bf-a').value) || 0,
+        B: parseFloat(document.getElementById('bf-b').value) || 0,
+        C: parseFloat(document.getElementById('bf-c').value) || 0,
+    };
+    const url = editId ? `/api/base-frames/${editId}/` : '/api/base-frames/';
+    const method = editId ? 'PUT' : 'POST';
+    fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            cancelBaseFrame();
+            loadBaseFrames();
+        } else {
+            alert('Error: ' + d.message);
+        }
+    });
+}
+
+function activateBaseFrame(id) {
+    fetch(`/api/base-frames/${id}/activate/`, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            loadBaseFrames();
+            // Refresh nominal base fields in the settings form
+            const f = d.frame;
+            document.querySelector('[name="nominal_base_x"]').value = f.X;
+            document.querySelector('[name="nominal_base_y"]').value = f.Y;
+            document.querySelector('[name="nominal_base_z"]').value = f.Z;
+            document.querySelector('[name="nominal_base_a"]').value = f.A;
+            document.querySelector('[name="nominal_base_b"]').value = f.B;
+            document.querySelector('[name="nominal_base_c"]').value = f.C;
+        } else {
+            alert('Error: ' + d.message);
+        }
+    });
+}
+
+function deleteBaseFrame(id, name) {
+    if (!confirm(`Delete base frame "${name}"?`)) return;
+    fetch(`/api/base-frames/${id}/`, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') loadBaseFrames();
+        else alert('Error: ' + d.message);
+    });
+}
+
+// Load base frames on page load
+document.addEventListener('DOMContentLoaded', loadBaseFrames);
+</script>
+{% endblock %}

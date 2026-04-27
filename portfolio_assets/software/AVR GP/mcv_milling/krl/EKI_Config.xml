@@ -1,0 +1,24 @@
+<ETHERNETKRL>
+    <CONFIGURATION>
+        <EXTERNAL>
+           <TYPE>Client</TYPE>
+        </EXTERNAL>
+        <INTERNAL>
+             <!-- IP of the PC running Django (change for your network) -->
+             <IP>192.168.1.100</IP>
+             <!-- Port must match Django settings robot_port -->
+             <PORT>54610</PORT>
+             <ALIVE Set_Flag="1"/>
+             <ENVIRONMENT>System</ENVIRONMENT>
+             <MESSAGES Logging="error" Display="disabled"/>
+        </INTERNAL>
+    </CONFIGURATION>
+    <RECEIVE>
+        <RAW>
+            <!-- Buffer for incoming commands from PC -->
+            <!-- EOS=59 is ASCII semicolon (;) = command terminator -->
+            <ELEMENT Tag="Buffer" Type="STREAM" Set_Flag="10" Size="64" EOS="59"/>
+        </RAW>
+    </RECEIVE>
+    <SEND/>
+</ETHERNETKRL>

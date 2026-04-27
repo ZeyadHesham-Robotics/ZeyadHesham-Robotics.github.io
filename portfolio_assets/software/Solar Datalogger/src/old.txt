@@ -1,0 +1,459 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ArduinoJson.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// WiFi credentials
+const char *ssid = "ZAD LAB";
+const char *password = "#Z2A0D#L2A4B#";
+
+// Create web server on port 80
+WebServer server(80);
+
+// LCD Configuration (20x4 I2C LCD)
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+
+// Pin definitions for analog sensors
+const int voltagePins[4] = {36, 39, 34, 35}; // GPIO pins for voltage sensors
+const int currentPins[4] = {32, 33, 25, 26}; // GPIO pins for ACS712 current sensors
+
+// Temperature sensor pins (DS18B20 - OneWire)
+const int tempPins[4] = {27, 4, 15, 16}; // GPIO pins for DS18B20 temperature sensors
+
+// Create OneWire instances for each temperature sensor
+OneWire oneWire0(tempPins[0]);
+OneWire oneWire1(tempPins[1]);
+OneWire oneWire2(tempPins[2]);
+OneWire oneWire3(tempPins[3]);
+
+// Create DallasTemperature instances
+DallasTemperature tempSensor0(&oneWire0);
+DallasTemperature tempSensor1(&oneWire1);
+DallasTemperature tempSensor2(&oneWire2);
+DallasTemperature tempSensor3(&oneWire3);
+
+// Array of temperature sensor pointers for easy access
+DallasTemperature *tempSensors[4] = {&tempSensor0, &tempSensor1, &tempSensor2, &tempSensor3};
+
+// Calibration constants
+const float voltageMultiplier = 9;      // Adjust based on your voltage divider ratio (R1+R2)/R2
+const float currentOffset = 2.5;        // ACS712 offset voltage (2.5V for 0A)
+const float currentSensitivity = 0.185; // ACS712-20A: 100mV/A, ACS712-5A: 185mV/A
+const float adcVoltage = 3.3;           // ESP32 ADC reference voltage
+const int adcResolution = 4095;         // 12-bit ADC resolution
+
+// Data structure for panel readings
+struct PanelData
+{
+    float voltage;
+    float current;
+    float power;
+    float temperature;
+    unsigned long timestamp;
+};
+
+PanelData panels[4];
+String panelNames[4] = {"Panel 1 (Ref)", "Panel 2 (15°)", "Panel 3 (30°)", "Panel 4 (45°)"};
+
+// Timing variables
+unsigned long lastReadTime = 0;
+unsigned long lastDisplayUpdate = 0;
+unsigned long lastDataSend = 0;
+const unsigned long readInterval = 1000;    // Read sensors every 1 second
+const unsigned long displayInterval = 2000; // Update display every 2 seconds
+const unsigned long sendInterval = 5000;    // Send data every 5 seconds
+
+int currentDisplayPanel = 0;
+
+// Moving average filter for stable readings
+const int filterSize = 5;
+float voltageFilter[4][filterSize];
+float currentFilter[4][filterSize];
+int filterIndex = 0;
+
+void setup()
+{
+    Serial.begin(115200);
+
+    // Initialize temperature sensors
+    Serial.println("Initializing temperature sensors...");
+    for (int i = 0; i < 4; i++)
+    {
+        tempSensors[i]->begin();
+        Serial.print("Temperature sensor ");
+        Serial.print(i);
+        Serial.print(" devices: ");
+        Serial.println(tempSensors[i]->getDeviceCount());
+    }
+
+    // Initialize filter arrays
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < filterSize; j++)
+        {
+            voltageFilter[i][j] = 0;
+            currentFilter[i][j] = 0;
+        }
+    }
+
+    // Initialize LCD
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0, 0);
+    lcd.print("Solar Monitor v1.0");
+    lcd.setCursor(0, 1);
+    lcd.print("Initializing...");
+
+    // Initialize WiFi
+    WiFi.begin(ssid, password);
+    lcd.setCursor(0, 2);
+    lcd.print("Connecting WiFi...");
+
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(1000);
+        Serial.print(".");
+    }
+
+    Serial.println();
+    Serial.println("WiFi connected!");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("WiFi Connected!");
+    lcd.setCursor(0, 1);
+    lcd.print("IP: ");
+    lcd.print(WiFi.localIP());
+    delay(2000);
+
+    // Setup web server routes
+    server.on("/", handleRoot);
+    server.on("/data", handleData);
+    server.on("/export", handleExport);
+    server.enableCORS(true);
+    server.begin();
+
+    Serial.println("HTTP server started");
+    Serial.println("Ready to collect data...");
+
+    // Clear display for normal operation
+    lcd.clear();
+}
+
+void loop()
+{
+    unsigned long currentTime = millis();
+
+    // Handle web server requests
+    server.handleClient();
+
+    // Read sensor data
+    if (currentTime - lastReadTime >= readInterval)
+    {
+        readAllSensors();
+        lastReadTime = currentTime;
+    }
+
+    // Update LCD display
+    if (currentTime - lastDisplayUpdate >= displayInterval)
+    {
+        updateDisplay();
+        lastDisplayUpdate = currentTime;
+    }
+
+    // Send data to Python (if requested)
+    if (currentTime - lastDataSend >= sendInterval)
+    {
+        sendDataToPython();
+        lastDataSend = currentTime;
+    }
+}
+
+void readAllSensors()
+{
+    // Start temperature conversion for all sensors (non-blocking)
+    for (int i = 0; i < 4; i++)
+    {
+        tempSensors[i]->requestTemperatures();
+    }
+
+    // Small delay to ensure temperature conversion is complete
+    delay(100);
+
+    for (int i = 0; i < 4; i++)
+    {
+        // Read voltage (with voltage divider circuit)
+        int voltageReading = analogRead(voltagePins[i]);
+        float rawVoltage = (voltageReading * adcVoltage / adcResolution) * voltageMultiplier;
+
+        // Read current (ACS712)
+        int currentReading = analogRead(currentPins[i]);
+        float currentVoltage = currentReading * adcVoltage / adcResolution;
+        float rawCurrent = (currentVoltage - currentOffset) / currentSensitivity;
+
+        // Ensure current is not negative (sensor noise)
+        if (rawCurrent < 0)
+        {
+            rawCurrent = 0;
+        }
+
+        // Apply moving average filter for stability
+        voltageFilter[i][filterIndex] = rawVoltage;
+        currentFilter[i][filterIndex] = rawCurrent;
+
+        // Calculate filtered average
+        float voltageSum = 0, currentSum = 0;
+        for (int j = 0; j < filterSize; j++)
+        {
+            voltageSum += voltageFilter[i][j];
+            currentSum += currentFilter[i][j];
+        }
+
+        panels[i].voltage = voltageSum / filterSize;
+        panels[i].current = currentSum / filterSize;
+
+        // Calculate power
+        panels[i].power = panels[i].voltage * panels[i].current;
+
+        // Read temperature from DS18B20
+        float tempC = tempSensors[i]->getTempCByIndex(0);
+
+        // Check if temperature reading is valid
+        if (tempC != DEVICE_DISCONNECTED_C && tempC > -50 && tempC < 100)
+        {
+            panels[i].temperature = tempC;
+        }
+        else
+        {
+            // Use previous reading or default value if sensor error
+            Serial.print("Temperature sensor ");
+            Serial.print(i);
+            Serial.println(" error - using previous reading");
+            // panels[i].temperature remains unchanged
+        }
+
+        // Update timestamp
+        panels[i].timestamp = millis();
+    }
+
+    // Update filter index
+    filterIndex = (filterIndex + 1) % filterSize;
+
+    // Print data to Serial for debugging
+    printDataToSerial();
+}
+
+void updateDisplay()
+{
+    lcd.clear();
+
+    // Display header
+    lcd.setCursor(0, 0);
+    lcd.print(panelNames[currentDisplayPanel]);
+
+    // Display voltage
+    lcd.setCursor(0, 1);
+    lcd.print("V:");
+    lcd.print(panels[currentDisplayPanel].voltage, 2);
+    lcd.print("V");
+
+    // Display current
+    lcd.setCursor(10, 1);
+    lcd.print("I:");
+    lcd.print(panels[currentDisplayPanel].current, 2);
+    lcd.print("A");
+
+    // Display power
+    lcd.setCursor(0, 2);
+    lcd.print("P:");
+    lcd.print(panels[currentDisplayPanel].power, 2);
+    lcd.print("W");
+
+    // Display temperature
+    lcd.setCursor(10, 2);
+    lcd.print("T:");
+    lcd.print(panels[currentDisplayPanel].temperature, 1);
+    lcd.print("C");
+
+    // Display efficiency comparison (compared to reference panel)
+    if (currentDisplayPanel > 0 && panels[0].power > 0)
+    {
+        lcd.setCursor(0, 3);
+        float efficiency = (panels[currentDisplayPanel].power / panels[0].power) * 100.0;
+        lcd.print("Eff: ");
+        lcd.print(efficiency, 1);
+        lcd.print("%");
+    }
+    else if (currentDisplayPanel == 0)
+    {
+        lcd.setCursor(0, 3);
+        lcd.print("Reference Panel");
+    }
+
+    // Display connection status
+    lcd.setCursor(14, 3);
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        lcd.print("WiFi");
+    }
+    else
+    {
+        lcd.print("----");
+    }
+
+    // Cycle through panels
+    currentDisplayPanel = (currentDisplayPanel + 1) % 4;
+}
+
+void printDataToSerial()
+{
+    Serial.println("=== Solar Panel Data ===");
+    Serial.print("Timestamp: ");
+    Serial.println(millis());
+
+    for (int i = 0; i < 4; i++)
+    {
+        Serial.print(panelNames[i]);
+        Serial.print(" - V: ");
+        Serial.print(panels[i].voltage, 2);
+        Serial.print("V, I: ");
+        Serial.print(panels[i].current, 2);
+        Serial.print("A, P: ");
+        Serial.print(panels[i].power, 2);
+        Serial.print("W, T: ");
+        Serial.print(panels[i].temperature, 1);
+        Serial.println("°C");
+    }
+    Serial.println();
+}
+
+void sendDataToPython()
+{
+    // This function sends data via Serial in JSON format
+    // Python can read this data from the serial port
+
+    DynamicJsonDocument doc(1024);
+    doc["timestamp"] = millis();
+    doc["ip_address"] = WiFi.localIP().toString();
+
+    JsonArray panelArray = doc.createNestedArray("panels");
+
+    for (int i = 0; i < 4; i++)
+    {
+        JsonObject panel = panelArray.createNestedObject();
+        panel["id"] = i;
+        panel["name"] = panelNames[i];
+        panel["voltage"] = round(panels[i].voltage * 100) / 100.0; // Round to 2 decimal places
+        panel["current"] = round(panels[i].current * 100) / 100.0;
+        panel["power"] = round(panels[i].power * 100) / 100.0;
+        panel["temperature"] = round(panels[i].temperature * 10) / 10.0; // Round to 1 decimal place
+        panel["timestamp"] = panels[i].timestamp;
+    }
+
+    String jsonString;
+    serializeJson(doc, jsonString);
+    Serial.println("JSON_DATA:" + jsonString);
+}
+
+void handleRoot()
+{
+    String html = "<!DOCTYPE html><html><head>";
+    html += "<title>Solar Panel Monitor</title>";
+    html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
+    html += "<style>";
+    html += "body{font-family:Arial;margin:20px;background:#f0f0f0;}";
+    html += ".container{max-width:1200px;margin:0 auto;background:white;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
+    html += ".panel{border:1px solid #ddd;margin:10px 0;padding:15px;border-radius:8px;background:#f9f9f9;}";
+    html += ".header{text-align:center;color:#333;margin-bottom:20px;}";
+    html += ".data-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px;}";
+    html += ".data-item{padding:10px;background:#e8f4f8;border-radius:5px;text-align:center;}";
+    html += ".refresh-btn{background:#4CAF50;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;margin:10px;}";
+    html += ".refresh-btn:hover{background:#45a049;}";
+    html += ".status{color:#666;font-size:12px;margin-top:10px;}";
+    html += "</style>";
+    html += "<script>";
+    html += "function refreshData(){fetch('/data').then(r=>r.json()).then(updateDisplay).catch(e=>console.error('Error:',e));}";
+    html += "function updateDisplay(data){";
+    html += "const container=document.getElementById('panels');";
+    html += "container.innerHTML='';";
+    html += "data.panels.forEach((panel,i)=>{";
+    html += "const div=document.createElement('div');div.className='panel';";
+    html += "div.innerHTML=`<h3>${panel.name}</h3><div class='data-grid'>`;";
+    html += "div.innerHTML+=`<div class='data-item'><strong>Voltage</strong><br>${panel.voltage.toFixed(2)} V</div>`;";
+    html += "div.innerHTML+=`<div class='data-item'><strong>Current</strong><br>${panel.current.toFixed(2)} A</div>`;";
+    html += "div.innerHTML+=`<div class='data-item'><strong>Power</strong><br>${panel.power.toFixed(2)} W</div>`;";
+    html += "div.innerHTML+=`<div class='data-item'><strong>Temperature</strong><br>${panel.temperature.toFixed(1)} °C</div>`;";
+    html += "if(i>0&&data.panels[0].power>0){";
+    html += "const eff=(panel.power/data.panels[0].power*100).toFixed(1);";
+    html += "div.innerHTML+=`<div class='data-item'><strong>Efficiency</strong><br>${eff}%</div>`;";
+    html += "}";
+    html += "div.innerHTML+='</div>';container.appendChild(div);";
+    html += "});";
+    html += "document.getElementById('timestamp').innerText=new Date(data.timestamp).toLocaleString();";
+    html += "}";
+    html += "setInterval(refreshData,2000);";
+    html += "</script></head><body>";
+    html += "<div class='container'>";
+    html += "<div class='header'><h1>🌞 Solar Panel Performance Monitor</h1>";
+    html += "<p>Real-time monitoring of 4 solar panels with different configurations</p>";
+    html += "<button class='refresh-btn' onclick='refreshData()'>Refresh Data</button>";
+    html += "<p>Last Update: <span id='timestamp'></span></p>";
+    html += "<div class='status'>System Status: Active | WiFi: Connected</div></div>";
+    html += "<div id='panels'></div>";
+    html += "<div style='text-align:center;margin-top:20px;'>";
+    html += "<a href='/export' class='refresh-btn'>Export CSV Data</a>";
+    html += "</div></div>";
+    html += "<script>refreshData();</script></body></html>";
+
+    server.send(200, "text/html", html);
+}
+
+void handleData()
+{
+    DynamicJsonDocument doc(1024);
+    doc["timestamp"] = millis();
+    doc["ip_address"] = WiFi.localIP().toString();
+    doc["wifi_status"] = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Disconnected";
+
+    JsonArray panelArray = doc.createNestedArray("panels");
+
+    for (int i = 0; i < 4; i++)
+    {
+        JsonObject panel = panelArray.createNestedObject();
+        panel["id"] = i;
+        panel["name"] = panelNames[i];
+        panel["voltage"] = round(panels[i].voltage * 100) / 100.0;
+        panel["current"] = round(panels[i].current * 100) / 100.0;
+        panel["power"] = round(panels[i].power * 100) / 100.0;
+        panel["temperature"] = round(panels[i].temperature * 10) / 10.0;
+        panel["timestamp"] = panels[i].timestamp;
+    }
+
+    String jsonString;
+    serializeJson(doc, jsonString);
+    server.send(200, "application/json", jsonString);
+}
+
+void handleExport()
+{
+    String csv = "Timestamp,Panel_ID,Panel_Name,Voltage_V,Current_A,Power_W,Temperature_C\n";
+
+    unsigned long currentTime = millis();
+    for (int i = 0; i < 4; i++)
+    {
+        csv += String(currentTime) + ",";
+        csv += String(i) + ",";
+        csv += "\"" + panelNames[i] + "\","; // Quote panel names for CSV safety
+        csv += String(panels[i].voltage, 3) + ",";
+        csv += String(panels[i].current, 3) + ",";
+        csv += String(panels[i].power, 3) + ",";
+        csv += String(panels[i].temperature, 2) + "\n";
+    }
+
+    server.send(200, "text/csv", csv);
+}

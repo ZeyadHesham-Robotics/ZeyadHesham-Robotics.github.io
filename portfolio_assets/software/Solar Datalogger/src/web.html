@@ -1,0 +1,73 @@
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Solar Panel Monitor</title>
+    <style>
+      body { background:#000; color:#0f0; font-family:monospace; text-align:center; margin:0; padding:0;}
+      table { margin: 0 auto; border-collapse: collapse; }
+      th, td { border: 1px solid #0f0; padding: 4px 8px; }
+      .btn { background:#0f0; color:#000; padding:8px 16px; border:none; border-radius:4px; cursor:pointer; margin-top:10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Solar Panel Monitor</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>Panel</th>
+          <th>Voltage (V)</th>
+          <th>Current (A)</th>
+          <th>Power (W)</th>
+          <th>Temperature (°C)</th>
+        </tr>
+      </thead>
+      <tbody id="panelTable"></tbody>
+    </table>
+    <button class="btn" onclick="downloadCSV()">Download CSV</button>
+    <script>
+      const logData = [];
+      function fetchData() {
+        fetch('/data').then(r => r.json()).then(d => {
+          let html = "";
+          for (let i = 0; i < d.voltage.length; i++) {
+            html += `<tr>
+              <td>${i+1}</td>
+              <td>${d.voltage[i].toFixed(2)}</td>
+              <td>${d.current[i].toFixed(2)}</td>
+              <td>${d.power[i].toFixed(2)}</td>
+              <td>${d.temperature[i].toFixed(2)}</td>
+            </tr>`;
+          }
+          document.getElementById('panelTable').innerHTML = html;
+          const t = new Date().toLocaleTimeString();
+          logData.push({time: t, ...d});
+          if (logData.length > 1000) logData.shift();
+        });
+      }
+      function downloadCSV() {
+        let csv = 'time';
+        for (let i = 1; i <= 4; i++) {
+          csv += `,V${i},A${i},W${i},T${i}`;
+        }
+        csv += '\n';
+        logData.forEach(r => {
+          csv += r.time;
+          for (let i = 0; i < 4; i++) {
+            csv += `,${r.voltage[i]},${r.current[i]},${r.power[i]},${r.temperature[i]}`;
+          }
+          csv += '\n';
+        });
+        const b = new Blob([csv], {type:'text/csv'});
+        const url = URL.createObjectURL(b);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'solar_log.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }
+      setInterval(fetchData, 1000);
+      fetchData();
+    </script>
+  </body>
+  </html>
+

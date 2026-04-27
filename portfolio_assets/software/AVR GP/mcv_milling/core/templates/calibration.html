@@ -1,0 +1,1634 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Calibration{% endblock %}
+{% block page_title %}<i class="bi bi-crosshair"></i> Calibration{% endblock %}
+
+{% block content %}
+<!-- Tab Navigation -->
+<ul class="nav nav-tabs cal-tabs mb-0" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-setup-btn" data-bs-toggle="tab" data-bs-target="#tab-setup" type="button" role="tab">
+            <i class="bi bi-check2-square"></i> Setup
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-control-btn" data-bs-toggle="tab" data-bs-target="#tab-control" type="button" role="tab">
+            <i class="bi bi-joystick"></i> Control
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-calibrate-btn" data-bs-toggle="tab" data-bs-target="#tab-calibrate" type="button" role="tab">
+            <i class="bi bi-crosshair"></i> Calibrate
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-vision-btn" data-bs-toggle="tab" data-bs-target="#tab-vision" type="button" role="tab">
+            <i class="bi bi-camera-video"></i> Vision
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-advanced-btn" data-bs-toggle="tab" data-bs-target="#tab-advanced" type="button" role="tab">
+            <i class="bi bi-gear"></i> Advanced
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content mt-3">
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- TAB 1: SETUP                                                -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade show active" id="tab-setup" role="tabpanel">
+<div class="row g-3">
+    <!-- Prerequisites -->
+    <div class="col-md-4">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <i class="bi bi-check2-square"></i> Prerequisites
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-{% if has_hand_eye %}check-circle text-success{% else %}x-circle text-danger{% endif %}"></i>
+                        Hand-Eye Calibration
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-{% if has_nominal %}check-circle text-success{% else %}x-circle text-danger{% endif %}"></i>
+                        Nominal Position Taught
+                    </li>
+                    <li class="mb-2" id="prereq-camera">
+                        <i class="bi bi-x-circle text-danger"></i>
+                        Camera Connected
+                    </li>
+                    <li class="mb-2" id="prereq-robot">
+                        <i class="bi bi-x-circle text-danger"></i>
+                        Robot Connected
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Tag Scanner & Assignment -->
+        <div class="card bg-dark border-secondary mt-3">
+            <div class="card-header border-secondary">
+                <i class="bi bi-eye"></i> Tag Scanner
+            </div>
+            <div class="card-body">
+                <button class="btn btn-outline-info btn-sm w-100 mb-3" onclick="scanAllTags()">
+                    <i class="bi bi-search"></i> Scan All Tags
+                </button>
+                <div id="tag-scan-result" class="small">
+                    <div class="text-muted mb-2">Current assignment:</div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-success"><i class="bi bi-geo-alt-fill"></i> Table:</span>
+                        <span id="cur-table-id" class="fw-bold">ID {{ settings.table_tag_id }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-warning"><i class="bi bi-box-fill"></i> Part:</span>
+                        <span id="cur-part-id" class="fw-bold">ID {{ settings.part_tag_id }}</span>
+                    </div>
+                    <hr class="border-secondary my-2">
+                    <div id="tag-list" class="text-muted">Click scan to detect tags</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Robot Position -->
+    <div class="col-md-8">
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-geo-alt"></i> Robot Position</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-info" id="btn-pos-live" onclick="toggleLivePos()">
+                        <i class="bi bi-broadcast"></i> Live
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="refreshPosition()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body py-2">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <div class="small text-muted mb-1">Cartesian (TCP)</div>
+                        <div class="font-monospace small d-flex flex-wrap gap-2" id="pos-cart">
+                            <span>X: <span id="pos-x" class="text-info">--</span></span>
+                            <span>Y: <span id="pos-y" class="text-info">--</span></span>
+                            <span>Z: <span id="pos-z" class="text-info">--</span></span>
+                            <span>A: <span id="pos-a" class="text-info">--</span></span>
+                            <span>B: <span id="pos-b" class="text-info">--</span></span>
+                            <span>C: <span id="pos-c" class="text-info">--</span></span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted mb-1">Joint Axes</div>
+                        <div class="font-monospace small d-flex flex-wrap gap-2" id="pos-joints">
+                            <span>A1: <span id="pos-a1" class="text-warning">--</span></span>
+                            <span>A2: <span id="pos-a2" class="text-warning">--</span></span>
+                            <span>A3: <span id="pos-a3" class="text-warning">--</span></span>
+                            <span>A4: <span id="pos-a4" class="text-warning">--</span></span>
+                            <span>A5: <span id="pos-a5" class="text-warning">--</span></span>
+                            <span>A6: <span id="pos-a6" class="text-warning">--</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div><!-- /tab-setup -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- TAB 2: CONTROL                                              -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-control" role="tabpanel">
+<div class="row g-3">
+    <!-- Compact Position Readout -->
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="font-monospace small d-flex flex-wrap gap-3" id="ctrl-pos">
+                        <span>X: <span class="pos-x-mirror text-info">--</span></span>
+                        <span>Y: <span class="pos-y-mirror text-info">--</span></span>
+                        <span>Z: <span class="pos-z-mirror text-info">--</span></span>
+                        <span>A: <span class="pos-a-mirror text-info">--</span></span>
+                        <span>B: <span class="pos-b-mirror text-info">--</span></span>
+                        <span>C: <span class="pos-c-mirror text-info">--</span></span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="refreshPosition()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <!-- Jog Panel -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header border-secondary">
+                <i class="bi bi-joystick"></i> Robot Jog Panel
+            </div>
+            <div id="jog-panel">
+                <div class="card-body">
+                    <div class="row g-2 mb-3">
+                        <!-- Mode Toggle -->
+                        <div class="col-auto">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="jog-mode" id="jog-cart" value="cartesian" checked>
+                                <label class="btn btn-outline-info" for="jog-cart">Cartesian</label>
+                                <input type="radio" class="btn-check" name="jog-mode" id="jog-joint" value="joint">
+                                <label class="btn btn-outline-warning" for="jog-joint">Joint</label>
+                            </div>
+                        </div>
+                        <!-- Step Size -->
+                        <div class="col-auto">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="jog-step" id="step-01" value="0.1">
+                                <label class="btn btn-outline-secondary" for="step-01">0.1</label>
+                                <input type="radio" class="btn-check" name="jog-step" id="step-1" value="1" checked>
+                                <label class="btn btn-outline-secondary" for="step-1">1</label>
+                                <input type="radio" class="btn-check" name="jog-step" id="step-10" value="10">
+                                <label class="btn btn-outline-secondary" for="step-10">10</label>
+                                <input type="radio" class="btn-check" name="jog-step" id="step-50" value="50">
+                                <label class="btn btn-outline-secondary" for="step-50">50</label>
+                            </div>
+                            <span class="ms-1 text-muted small" id="jog-unit">mm/deg</span>
+                        </div>
+                        <!-- Speed -->
+                        <div class="col-auto ms-auto">
+                            <label class="form-label small text-muted mb-0">Speed</label>
+                            <input type="range" id="jog-speed" class="form-range" style="width:120px;" min="1" max="100" value="10"
+                                   oninput="document.getElementById('jog-speed-val').textContent=this.value+'%'">
+                            <span id="jog-speed-val" class="small text-muted">10%</span>
+                        </div>
+                    </div>
+
+                    <!-- Cartesian Jog Buttons -->
+                    <div id="jog-cart-buttons">
+                        <div class="row g-1 text-center">
+                            <div class="col-4">
+                                <div class="mb-1 small text-danger fw-bold">X</div>
+                                <button class="btn btn-sm btn-outline-danger me-1" onclick="jog('X',-1)"><i class="bi bi-dash"></i> X-</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="jog('X',1)">X+ <i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4">
+                                <div class="mb-1 small text-success fw-bold">Y</div>
+                                <button class="btn btn-sm btn-outline-success me-1" onclick="jog('Y',-1)"><i class="bi bi-dash"></i> Y-</button>
+                                <button class="btn btn-sm btn-outline-success" onclick="jog('Y',1)">Y+ <i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4">
+                                <div class="mb-1 small text-primary fw-bold">Z</div>
+                                <button class="btn btn-sm btn-outline-primary me-1" onclick="jog('Z',-1)"><i class="bi bi-dash"></i> Z-</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="jog('Z',1)">Z+ <i class="bi bi-plus"></i></button>
+                            </div>
+                        </div>
+                        <div class="row g-1 text-center mt-2">
+                            <div class="col-4">
+                                <div class="mb-1 small text-info fw-bold">A (Rz)</div>
+                                <button class="btn btn-sm btn-outline-info me-1" onclick="jog('A',-1)"><i class="bi bi-dash"></i> A-</button>
+                                <button class="btn btn-sm btn-outline-info" onclick="jog('A',1)">A+ <i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4">
+                                <div class="mb-1 small text-info fw-bold">B (Ry)</div>
+                                <button class="btn btn-sm btn-outline-info me-1" onclick="jog('B',-1)"><i class="bi bi-dash"></i> B-</button>
+                                <button class="btn btn-sm btn-outline-info" onclick="jog('B',1)">B+ <i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4">
+                                <div class="mb-1 small text-info fw-bold">C (Rx)</div>
+                                <button class="btn btn-sm btn-outline-info me-1" onclick="jog('C',-1)"><i class="bi bi-dash"></i> C-</button>
+                                <button class="btn btn-sm btn-outline-info" onclick="jog('C',1)">C+ <i class="bi bi-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Joint Jog Buttons (hidden by default) -->
+                    <div id="jog-joint-buttons" style="display:none;">
+                        <div class="row g-1 text-center">
+                            <div class="col-4 mb-2" >
+                                <div class="small text-warning fw-bold">A1</div>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="jog('A1',-1)"><i class="bi bi-dash"></i></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="jog('A1',1)"><i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4 mb-2">
+                                <div class="small text-warning fw-bold">A2</div>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="jog('A2',-1)"><i class="bi bi-dash"></i></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="jog('A2',1)"><i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4 mb-2">
+                                <div class="small text-warning fw-bold">A3</div>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="jog('A3',-1)"><i class="bi bi-dash"></i></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="jog('A3',1)"><i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-warning fw-bold">A4</div>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="jog('A4',-1)"><i class="bi bi-dash"></i></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="jog('A4',1)"><i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-warning fw-bold">A5</div>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="jog('A5',-1)"><i class="bi bi-dash"></i></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="jog('A5',1)"><i class="bi bi-plus"></i></button>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-warning fw-bold">A6</div>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="jog('A6',-1)"><i class="bi bi-dash"></i></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="jog('A6',1)"><i class="bi bi-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Teach Capture Position -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-pin-map"></i> Capture Position</span>
+                <button class="btn btn-sm btn-outline-warning" onclick="teachCapture()">
+                    <i class="bi bi-bullseye"></i> Teach from Current
+                </button>
+            </div>
+            <div class="card-body py-2">
+                <div class="font-monospace small" id="capture-pos-display">
+                    Current: {{ settings.capture_joint_pos_json }}
+                </div>
+                <span id="teach-capture-status" class="small"></span>
+            </div>
+        </div>
+    </div>
+</div>
+</div><!-- /tab-control -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- TAB 3: CALIBRATE                                            -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-calibrate" role="tabpanel">
+<div class="row g-3">
+    <div class="col-12">
+        <!-- Teach Nominal -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header border-secondary">
+                <i class="bi bi-bullseye"></i> Step 1: Teach Nominal Position
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Place the part at its reference position with tag mounted. This teaches the nominal part-to-table transform.</p>
+                <button class="btn btn-warning btn-sm" onclick="teachNominal()">
+                    <i class="bi bi-camera"></i> Teach Nominal
+                </button>
+                <span id="teach-status" class="ms-2 small"></span>
+            </div>
+        </div>
+
+        <!-- Run Calibration -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header border-secondary">
+                <i class="bi bi-crosshair"></i> Step 2: Run Calibration Cycle
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Robot moves to capture position, detects tags, computes correction, and sends corrected $BASE.</p>
+                <button id="btn-calibrate" class="btn btn-lg btn-success w-100" onclick="runCalibration()">
+                    <i class="bi bi-play-fill"></i> CALIBRATE
+                </button>
+            </div>
+        </div>
+
+        <!-- Auto-Calibration & Dry Run -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-arrow-repeat"></i> Auto-Calibration</span>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="dry-run-toggle" {% if settings.dry_run_mode %}checked{% endif %} onchange="toggleDryRun()">
+                    <label class="form-check-label small text-warning" for="dry-run-toggle">Dry Run</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-2 align-items-center mb-2">
+                    <label class="small text-muted mb-0">Cycles:</label>
+                    <input type="number" id="auto-cycles" class="form-control form-control-sm bg-darker" style="width: 70px;" value="3" min="1" max="20">
+                    <button class="btn btn-sm btn-outline-success flex-fill" onclick="runAutoCal()">
+                        <i class="bi bi-play-fill"></i> Auto-Calibrate
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" onclick="runRepeatability()">
+                        <i class="bi bi-clipboard-data"></i> Repeatability
+                    </button>
+                </div>
+                <div id="auto-cal-result" class="small"></div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="card bg-dark border-secondary" id="cal-results" style="display:none;">
+            <div class="card-header border-secondary">
+                <i class="bi bi-clipboard-data"></i> Calibration Result
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-orange">Correction (delta)</h6>
+                        <table class="table table-dark table-sm">
+                            <tbody id="correction-table"></tbody>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-orange">Corrected $BASE</h6>
+                        <table class="table table-dark table-sm">
+                            <tbody id="base-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="cal-magnitude" class="mt-2 small"></div>
+            </div>
+        </div>
+    </div>
+</div>
+</div><!-- /tab-calibrate -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- TAB 4: VISION                                               -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-vision" role="tabpanel">
+<!-- Live Feed -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-camera-video"></i> Camera Feed</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-success" onclick="startVideoStream()">
+                        <i class="bi bi-play-fill"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="stopVideoStream()">
+                        <i class="bi bi-stop-fill"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0 text-center">
+                <img id="video-feed" src="" class="img-fluid" style="max-height: 400px; display:none;">
+                <div id="video-placeholder" class="py-4 text-muted">
+                    <i class="bi bi-camera-video-off" style="font-size: 2rem;"></i>
+                    <p class="small">Start feed to preview tag detection</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Workspace Visualization (XY Plane) -->
+<div class="row mt-3">
+    <div class="col-md-5">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-bounding-box"></i> XY Plane (Table Tag Frame)</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-info" onclick="captureWorkspace()">
+                        <i class="bi bi-crosshair"></i> Capture
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" id="btn-ws-auto" onclick="toggleWsAuto()">
+                        <i class="bi bi-arrow-repeat"></i> Auto
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-2 text-center">
+                <canvas id="ws-canvas" width="400" height="400" style="background: #050505; border: 1px solid #333; max-width: 100%;"></canvas>
+            </div>
+            <div class="card-footer border-secondary small" id="ws-info">
+                <div id="ws-telemetry" class="font-monospace" style="font-size: 0.75rem; line-height: 1.4;">
+                    <span class="text-muted">Point camera at table + part tags</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary">
+                <i class="bi bi-info-circle"></i> Workspace Coordinates
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-success small fw-bold">Table Tag (Origin)</h6>
+                        <table class="table table-dark table-sm mb-3" style="font-size: 0.8rem;">
+                            <tbody>
+                                <tr><td class="text-muted">Position</td><td id="ws-table-pos" class="font-monospace">--</td></tr>
+                                <tr><td class="text-muted">Z Distance</td><td id="ws-table-dist" class="font-monospace">--</td></tr>
+                            </tbody>
+                        </table>
+                        <h6 class="text-warning small fw-bold">Part Tag (Current)</h6>
+                        <table class="table table-dark table-sm mb-3" style="font-size: 0.8rem;">
+                            <tbody>
+                                <tr><td class="text-muted">X (mm)</td><td id="ws-part-x" class="font-monospace text-warning">--</td></tr>
+                                <tr><td class="text-muted">Y (mm)</td><td id="ws-part-y" class="font-monospace text-warning">--</td></tr>
+                                <tr><td class="text-muted">Z (mm)</td><td id="ws-part-z" class="font-monospace text-warning">--</td></tr>
+                                <tr><td class="text-muted">Angle (deg)</td><td id="ws-part-angle" class="font-monospace text-warning">--</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-info small fw-bold">Nominal Part Position</h6>
+                        <table class="table table-dark table-sm mb-3" style="font-size: 0.8rem;">
+                            <tbody>
+                                <tr><td class="text-muted">X (mm)</td><td id="ws-nom-x" class="font-monospace text-info">--</td></tr>
+                                <tr><td class="text-muted">Y (mm)</td><td id="ws-nom-y" class="font-monospace text-info">--</td></tr>
+                                <tr><td class="text-muted">Z (mm)</td><td id="ws-nom-z" class="font-monospace text-info">--</td></tr>
+                            </tbody>
+                        </table>
+                        <h6 class="text-danger small fw-bold">Displacement</h6>
+                        <table class="table table-dark table-sm mb-0" style="font-size: 0.8rem;">
+                            <tbody>
+                                <tr><td class="text-muted">dX (mm)</td><td id="ws-disp-dx" class="font-monospace">--</td></tr>
+                                <tr><td class="text-muted">dY (mm)</td><td id="ws-disp-dy" class="font-monospace">--</td></tr>
+                                <tr><td class="text-muted">dZ (mm)</td><td id="ws-disp-dz" class="font-monospace">--</td></tr>
+                                <tr><td class="text-muted">dAngle</td><td id="ws-disp-da" class="font-monospace">--</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Segmentation / Diagnostics View -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-grid-3x3-gap"></i> Segmentation Diagnostics</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-warning" onclick="captureSegmentation()">
+                        <i class="bi bi-camera"></i> Capture
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" id="btn-seg-auto" onclick="toggleSegAuto()">
+                        <i class="bi bi-arrow-repeat"></i> Auto
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-1 text-center">
+                <img id="seg-image" src="" class="img-fluid" style="display:none;">
+                <div id="seg-placeholder" class="py-3 text-muted">
+                    <i class="bi bi-grid-3x3-gap" style="font-size: 2rem;"></i>
+                    <p class="small mb-1">Shows: Raw | CLAHE Enhanced | Adaptive Threshold | Detection Overlay</p>
+                    <p class="small text-warning mb-0">Use this to diagnose tag detection issues (low contrast, faded prints)</p>
+                </div>
+            </div>
+            <div class="card-footer border-secondary small" id="seg-info" style="display:none;">
+                <div class="row">
+                    <div class="col-auto">
+                        <span class="text-muted">Tags found:</span>
+                        <span id="seg-found" class="text-success fw-bold">0</span>
+                    </div>
+                    <div class="col-auto">
+                        <span class="text-muted">Rejected candidates:</span>
+                        <span id="seg-rejected" class="text-warning">0</span>
+                    </div>
+                    <div class="col" id="seg-tags-detail"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div><!-- /tab-vision -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- TAB 5: ADVANCED                                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-advanced" role="tabpanel">
+<!-- 3D Workspace Visualization -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-box"></i> 3D Workspace View</span>
+                <button class="btn btn-sm btn-outline-info" onclick="update3DView()">
+                    <i class="bi bi-arrow-clockwise"></i> Update
+                </button>
+            </div>
+            <div class="card-body p-0" style="height: 350px;">
+                <div id="three-container" style="width:100%; height:100%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hand-Eye Calibration Wizard -->
+<div class="row mt-3">
+    <div class="col-md-6">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-grid-3x3"></i> Hand-Eye Calibration</span>
+                <button class="btn btn-sm btn-outline-danger" onclick="resetHandEye()">Reset</button>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Move robot to different poses with table tag visible. Capture 5+ samples, then compute.</p>
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-sm btn-outline-info flex-fill" onclick="captureHandEye()">
+                        <i class="bi bi-camera"></i> Capture Sample
+                    </button>
+                    <button class="btn btn-sm btn-warning flex-fill" id="btn-he-compute" onclick="computeHandEye()" disabled>
+                        <i class="bi bi-calculator"></i> Compute
+                    </button>
+                </div>
+                <div id="he-status" class="small">
+                    <span class="text-muted">Samples: </span>
+                    <span id="he-count" class="fw-bold text-orange">0</span>
+                    <span class="text-muted"> / 5 minimum</span>
+                </div>
+                <div id="he-result" style="display:none;" class="mt-2 small">
+                    <div class="text-success fw-bold">Calibration computed!</div>
+                    <div class="text-muted">Translation: <span id="he-translation" class="text-info">--</span> mm</div>
+                    <button class="btn btn-sm btn-success mt-2" onclick="applyHandEye()">
+                        <i class="bi bi-check-lg"></i> Apply to Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HSV Tuner -->
+    <div class="col-md-6">
+        <div class="card bg-dark border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between">
+                <span><i class="bi bi-palette"></i> HSV Color Tuner</span>
+                <button class="btn btn-sm btn-outline-info" onclick="previewHSV()">
+                    <i class="bi bi-eye"></i> Preview
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-0">H Low: <span id="hl-val">0</span></label>
+                        <input type="range" class="form-range" id="h-low" min="0" max="180" value="0" oninput="document.getElementById('hl-val').textContent=this.value">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-0">H High: <span id="hh-val">180</span></label>
+                        <input type="range" class="form-range" id="h-high" min="0" max="180" value="180" oninput="document.getElementById('hh-val').textContent=this.value">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-0">S Low: <span id="sl-val">0</span></label>
+                        <input type="range" class="form-range" id="s-low" min="0" max="255" value="0" oninput="document.getElementById('sl-val').textContent=this.value">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-0">S High: <span id="sh-val">255</span></label>
+                        <input type="range" class="form-range" id="s-high" min="0" max="255" value="255" oninput="document.getElementById('sh-val').textContent=this.value">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-0">V Low: <span id="vl-val">0</span></label>
+                        <input type="range" class="form-range" id="v-low" min="0" max="255" value="0" oninput="document.getElementById('vl-val').textContent=this.value">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-0">V High: <span id="vh-val">255</span></label>
+                        <input type="range" class="form-range" id="v-high" min="0" max="255" value="255" oninput="document.getElementById('vh-val').textContent=this.value">
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">Mask: <span id="hsv-mask-pct">--%</span></span>
+                    <button class="btn btn-sm btn-success" onclick="saveHSV()">
+                        <i class="bi bi-check-lg"></i> Save
+                    </button>
+                </div>
+                <img id="hsv-preview" src="" class="img-fluid mt-2" style="display:none;">
+            </div>
+        </div>
+    </div>
+</div>
+</div><!-- /tab-advanced -->
+
+</div><!-- /tab-content -->
+
+<script>
+let videoWs = null;
+let segAutoInterval = null;
+let wsAutoInterval = null;
+let lastWsData = null;
+let livePosInterval = null;
+let heMatrix = null;
+
+// ── Robot Jog ───────────────────────────────────────────────
+document.querySelectorAll('input[name="jog-mode"]').forEach(r => {
+    r.addEventListener('change', function() {
+        document.getElementById('jog-cart-buttons').style.display = this.value === 'cartesian' ? 'block' : 'none';
+        document.getElementById('jog-joint-buttons').style.display = this.value === 'joint' ? 'block' : 'none';
+    });
+});
+
+function getJogStep() {
+    const checked = document.querySelector('input[name="jog-step"]:checked');
+    return checked ? parseFloat(checked.value) : 1.0;
+}
+
+function getJogMode() {
+    const checked = document.querySelector('input[name="jog-mode"]:checked');
+    return checked ? checked.value : 'cartesian';
+}
+
+function jog(axis, direction) {
+    const step = getJogStep() * direction;
+    const mode = getJogMode();
+    fetch('/api/robot/jog/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({axis, step, mode})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status !== 'ok') alert('Jog error: ' + d.message);
+        else refreshPosition();
+    })
+    .catch(e => alert('Jog failed: ' + e));
+}
+
+// ── Live Robot Position ─────────────────────────────────────
+function refreshPosition() {
+    fetch('/api/robot/position/')
+    .then(r => r.json())
+    .then(d => {
+        if (!d.connected) {
+            ['x','y','z','a','b','c'].forEach(a => document.getElementById('pos-'+a).textContent = '--');
+            ['a1','a2','a3','a4','a5','a6'].forEach(a => document.getElementById('pos-'+a).textContent = '--');
+            return;
+        }
+        if (d.cartesian) {
+            const axes = {x: 'X', y: 'Y', z: 'Z', a: 'A', b: 'B', c: 'C'};
+            for (const [lower, upper] of Object.entries(axes)) {
+                const val = d.cartesian[upper].toFixed(2);
+                document.getElementById('pos-' + lower).textContent = val;
+                document.querySelectorAll('.pos-' + lower + '-mirror').forEach(el => el.textContent = val);
+            }
+        }
+        if (d.joints) {
+            document.getElementById('pos-a1').textContent = d.joints.A1.toFixed(2);
+            document.getElementById('pos-a2').textContent = d.joints.A2.toFixed(2);
+            document.getElementById('pos-a3').textContent = d.joints.A3.toFixed(2);
+            document.getElementById('pos-a4').textContent = d.joints.A4.toFixed(2);
+            document.getElementById('pos-a5').textContent = d.joints.A5.toFixed(2);
+            document.getElementById('pos-a6').textContent = d.joints.A6.toFixed(2);
+        }
+    });
+}
+
+function toggleLivePos() {
+    const btn = document.getElementById('btn-pos-live');
+    if (livePosInterval) {
+        clearInterval(livePosInterval);
+        livePosInterval = null;
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-outline-info');
+    } else {
+        refreshPosition();
+        livePosInterval = setInterval(refreshPosition, 500);
+        btn.classList.remove('btn-outline-info');
+        btn.classList.add('btn-info');
+    }
+}
+
+// ── Teach Capture Position ──────────────────────────────────
+function teachCapture() {
+    if (!confirm('Save current robot position as capture position?')) return;
+    fetch('/api/robot/teach-capture/', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+        const el = document.getElementById('teach-capture-status');
+        if (d.status === 'ok') {
+            el.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Saved!</span>';
+            document.getElementById('capture-pos-display').textContent =
+                'Current: ' + JSON.stringify(d.joint_pos.map(v => parseFloat(v.toFixed(2))));
+        } else {
+            el.innerHTML = '<span class="text-danger">' + d.message + '</span>';
+        }
+    });
+}
+
+// ── 3D Workspace (Three.js) ─────────────────────────────────
+let scene3d, camera3d, renderer3d, controls3d;
+let tableMarker3d, partMarker3d, nominalMarker3d;
+
+function init3DView() {
+    const container = document.getElementById('three-container');
+    if (!container || typeof THREE === 'undefined') return;
+
+    scene3d = new THREE.Scene();
+    scene3d.background = new THREE.Color(0x0a0a1a);
+
+    camera3d = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 1, 5000);
+    camera3d.position.set(300, 300, 300);
+    camera3d.lookAt(0, 0, 0);
+
+    renderer3d = new THREE.WebGLRenderer({antialias: true});
+    renderer3d.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer3d.domElement);
+
+    // Controls
+    if (typeof THREE.OrbitControls !== 'undefined') {
+        controls3d = new THREE.OrbitControls(camera3d, renderer3d.domElement);
+        controls3d.enableDamping = true;
+    }
+
+    // Grid
+    const grid = new THREE.GridHelper(1000, 10, 0x444444, 0x222222);
+    grid.rotation.x = Math.PI / 2;
+    scene3d.add(grid);
+
+    // Axes helper (RGB = XYZ)
+    scene3d.add(new THREE.AxesHelper(150));
+
+    // Table tag marker (green cube at origin)
+    const tableGeo = new THREE.BoxGeometry(30, 30, 5);
+    const tableMat = new THREE.MeshBasicMaterial({color: 0x00cc88, wireframe: false});
+    tableMarker3d = new THREE.Mesh(tableGeo, tableMat);
+    scene3d.add(tableMarker3d);
+
+    // Part marker (orange sphere)
+    const partGeo = new THREE.SphereGeometry(12, 16, 16);
+    const partMat = new THREE.MeshBasicMaterial({color: 0xff8800});
+    partMarker3d = new THREE.Mesh(partGeo, partMat);
+    partMarker3d.visible = false;
+    scene3d.add(partMarker3d);
+
+    // Nominal marker (blue wireframe box)
+    const nomGeo = new THREE.BoxGeometry(25, 25, 5);
+    const nomMat = new THREE.MeshBasicMaterial({color: 0x00b4ff, wireframe: true});
+    nominalMarker3d = new THREE.Mesh(nomGeo, nomMat);
+    nominalMarker3d.visible = false;
+    scene3d.add(nominalMarker3d);
+
+    // Ambient light
+    scene3d.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    animate3D();
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+        if (!renderer3d || !container) return;
+        camera3d.aspect = container.clientWidth / container.clientHeight;
+        camera3d.updateProjectionMatrix();
+        renderer3d.setSize(container.clientWidth, container.clientHeight);
+    });
+}
+
+function animate3D() {
+    if (!renderer3d) return;
+    requestAnimationFrame(animate3D);
+    if (controls3d) controls3d.update();
+    renderer3d.render(scene3d, camera3d);
+}
+
+function update3DView() {
+    fetch('/api/calibration/workspace/', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+        if (d.status !== 'ok' || !scene3d) return;
+        if (d.part_position) {
+            partMarker3d.position.set(d.part_position.x, d.part_position.y, d.part_position.z);
+            partMarker3d.visible = true;
+        } else {
+            partMarker3d.visible = false;
+        }
+        if (d.nominal_part_position) {
+            nominalMarker3d.position.set(d.nominal_part_position.x, d.nominal_part_position.y, d.nominal_part_position.z);
+            nominalMarker3d.visible = true;
+        } else {
+            nominalMarker3d.visible = false;
+        }
+        // Also update 2D workspace
+        drawWorkspace(d);
+        updateWsTelemetry(d);
+    });
+}
+
+// Initialize 3D view on page load
+document.addEventListener('DOMContentLoaded', init3DView);
+
+// ── Workspace Visualization (XY Plane Canvas) ──────────────
+
+function drawWorkspace(data) {
+    lastWsData = data;
+    const canvas = document.getElementById('ws-canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    const margin = 40;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, W, H);
+
+    // Determine workspace bounds from data
+    let points = [[0, 0]]; // Origin (table tag) always included
+    if (data.part_position) points.push([data.part_position.x, data.part_position.y]);
+    if (data.nominal_part_position) points.push([data.nominal_part_position.x, data.nominal_part_position.y]);
+
+    let xMin = Math.min(...points.map(p => p[0]));
+    let xMax = Math.max(...points.map(p => p[0]));
+    let yMin = Math.min(...points.map(p => p[1]));
+    let yMax = Math.max(...points.map(p => p[1]));
+
+    // Add padding (at least 200mm around, snap to 100mm grid)
+    const pad = 200;
+    xMin = Math.floor((xMin - pad) / 100) * 100;
+    xMax = Math.ceil((xMax + pad) / 100) * 100;
+    yMin = Math.floor((yMin - pad) / 100) * 100;
+    yMax = Math.ceil((yMax + pad) / 100) * 100;
+
+    // Ensure minimum range
+    if (xMax - xMin < 400) { xMin = -200; xMax = 200; }
+    if (yMax - yMin < 400) { yMin = -200; yMax = 200; }
+
+    // Mapping functions: mm -> canvas pixels
+    const scaleX = (W - 2 * margin) / (xMax - xMin);
+    const scaleY = (H - 2 * margin) / (yMax - yMin);
+    const scale = Math.min(scaleX, scaleY);
+    const offsetX = margin + ((W - 2 * margin) - (xMax - xMin) * scale) / 2;
+    const offsetY = margin + ((H - 2 * margin) - (yMax - yMin) * scale) / 2;
+
+    function mm2px(xMm, yMm) {
+        const px = offsetX + (xMm - xMin) * scale;
+        const py = (H - offsetY) - (yMm - yMin) * scale;
+        return [px, py];
+    }
+
+    // ── Grid lines at 100mm intervals ──
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 0.5;
+    ctx.font = '9px monospace';
+    ctx.fillStyle = '#555';
+
+    for (let x = xMin; x <= xMax; x += 100) {
+        const [px, _] = mm2px(x, 0);
+        ctx.beginPath();
+        ctx.moveTo(px, margin);
+        ctx.lineTo(px, H - margin);
+        ctx.stroke();
+        // X axis labels at bottom
+        const [lx, ly] = mm2px(x, yMin);
+        ctx.fillText(x.toString(), lx - 10, ly + 14);
+    }
+    for (let y = yMin; y <= yMax; y += 100) {
+        const [_, py] = mm2px(0, y);
+        ctx.beginPath();
+        ctx.moveTo(margin, py);
+        ctx.lineTo(W - margin, py);
+        ctx.stroke();
+        // Y axis labels on left
+        const [lx, ly] = mm2px(xMin, y);
+        ctx.fillText(y.toString(), lx - 35, ly + 3);
+    }
+
+    // ── Draw origin axes (table tag = origin) ──
+    const [ox, oy] = mm2px(0, 0);
+    const axisLen = 80;
+
+    // X axis (Red)
+    ctx.strokeStyle = '#ff3333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox + axisLen, oy);
+    ctx.stroke();
+    // Arrow head
+    ctx.fillStyle = '#ff3333';
+    ctx.beginPath();
+    ctx.moveTo(ox + axisLen, oy);
+    ctx.lineTo(ox + axisLen - 8, oy - 4);
+    ctx.lineTo(ox + axisLen - 8, oy + 4);
+    ctx.fill();
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('X', ox + axisLen + 4, oy + 4);
+
+    // Y axis (Green)
+    ctx.strokeStyle = '#33ff33';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox, oy - axisLen);
+    ctx.stroke();
+    ctx.fillStyle = '#33ff33';
+    ctx.beginPath();
+    ctx.moveTo(ox, oy - axisLen);
+    ctx.lineTo(ox - 4, oy - axisLen + 8);
+    ctx.lineTo(ox + 4, oy - axisLen + 8);
+    ctx.fill();
+    ctx.fillText('Y', ox - 5, oy - axisLen - 6);
+
+    // Z indicator (Blue dot)
+    ctx.fillStyle = '#3366ff';
+    ctx.beginPath();
+    ctx.arc(ox, oy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#3366ff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(ox, oy, 8, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Origin label
+    ctx.fillStyle = '#00cc88';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('TABLE (0,0)', ox + 12, oy + 16);
+
+    // ── Draw nominal part position (blue/cyan) ──
+    if (data.nominal_part_position) {
+        const np = data.nominal_part_position;
+        const [npx, npy] = mm2px(np.x, np.y);
+
+        // Coordinate frame (smaller)
+        if (data.nominal_part_axes) {
+            const aLen = 40;
+            const xd = data.nominal_part_axes.x_dir;
+            const yd = data.nominal_part_axes.y_dir;
+            // X axis of nominal part
+            ctx.strokeStyle = 'rgba(0, 180, 255, 0.6)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(npx, npy);
+            ctx.lineTo(npx + xd[0] * aLen, npy - xd[1] * aLen);
+            ctx.stroke();
+            // Y axis of nominal part
+            ctx.strokeStyle = 'rgba(0, 255, 180, 0.6)';
+            ctx.beginPath();
+            ctx.moveTo(npx, npy);
+            ctx.lineTo(npx + yd[0] * aLen, npy - yd[1] * aLen);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // Nominal position marker (hollow square)
+        ctx.strokeStyle = '#00b4ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(npx - 6, npy - 6, 12, 12);
+
+        ctx.fillStyle = '#00b4ff';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`NOM (${np.x.toFixed(0)}, ${np.y.toFixed(0)})`, npx + 10, npy - 8);
+    }
+
+    // ── Draw current part position (orange) ──
+    if (data.part_position) {
+        const pp = data.part_position;
+        const [ppx, ppy] = mm2px(pp.x, pp.y);
+
+        // Coordinate frame
+        if (data.part_axes) {
+            const aLen = 50;
+            const xd = data.part_axes.x_dir;
+            const yd = data.part_axes.y_dir;
+            // X axis of current part
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(ppx, ppy);
+            ctx.lineTo(ppx + xd[0] * aLen, ppy - xd[1] * aLen);
+            ctx.stroke();
+            // Y axis of current part
+            ctx.strokeStyle = '#44ff44';
+            ctx.beginPath();
+            ctx.moveTo(ppx, ppy);
+            ctx.lineTo(ppx + yd[0] * aLen, ppy - yd[1] * aLen);
+            ctx.stroke();
+        }
+
+        // Current position marker (filled circle)
+        ctx.fillStyle = '#ff8800';
+        ctx.beginPath();
+        ctx.arc(ppx, ppy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(ppx, ppy, 6, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ff8800';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText(`PART (${pp.x.toFixed(1)}, ${pp.y.toFixed(1)})`, ppx + 10, ppy + 4);
+
+        // Displacement arrow from nominal to current
+        if (data.nominal_part_position && data.displacement) {
+            const np = data.nominal_part_position;
+            const [npx, npy] = mm2px(np.x, np.y);
+            ctx.strokeStyle = '#ff4466';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(npx, npy);
+            ctx.lineTo(ppx, ppy);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Delta label at midpoint
+            const mx = (npx + ppx) / 2;
+            const my = (npy + ppy) / 2;
+            const d = data.displacement;
+            const mag = Math.sqrt(d.dx * d.dx + d.dy * d.dy);
+            ctx.fillStyle = '#ff4466';
+            ctx.font = '9px monospace';
+            ctx.fillText(`d=${mag.toFixed(1)}mm`, mx + 5, my - 5);
+        }
+    }
+
+    // ── Axis labels ──
+    ctx.fillStyle = '#888';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('X (mm) \u2192', W / 2 - 20, H - 5);
+    ctx.save();
+    ctx.translate(10, H / 2 + 20);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Y (mm) \u2192', 0, 0);
+    ctx.restore();
+
+    // ── Legend ──
+    const lx = W - 130;
+    let ly = 15;
+    ctx.font = '9px sans-serif';
+
+    ctx.fillStyle = '#00cc88';
+    ctx.fillRect(lx, ly - 4, 8, 8);
+    ctx.fillStyle = '#999';
+    ctx.fillText('Table (origin)', lx + 12, ly + 4);
+    ly += 14;
+
+    ctx.fillStyle = '#00b4ff';
+    ctx.strokeStyle = '#00b4ff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(lx, ly - 4, 8, 8);
+    ctx.fillStyle = '#999';
+    ctx.fillText('Nominal part', lx + 12, ly + 4);
+    ly += 14;
+
+    ctx.fillStyle = '#ff8800';
+    ctx.beginPath();
+    ctx.arc(lx + 4, ly, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#999';
+    ctx.fillText('Current part', lx + 12, ly + 4);
+}
+
+function updateWsTelemetry(data) {
+    const tel = document.getElementById('ws-telemetry');
+    let html = '';
+
+    if (!data.table_found && !data.part_found) {
+        html = '<span class="text-danger">No tags detected. Point camera at workspace.</span>';
+    } else {
+        if (data.table_found)
+            html += `<span class="text-success">Table tag: ${data.table_dist_mm}mm</span><br>`;
+        else
+            html += '<span class="text-danger">Table tag: NOT FOUND</span><br>';
+
+        if (data.part_found)
+            html += `<span class="text-warning">Part tag: ${data.part_dist_mm}mm</span><br>`;
+        else
+            html += '<span class="text-danger">Part tag: NOT FOUND</span><br>';
+
+        if (data.part_position) {
+            const p = data.part_position;
+            html += `<span class="text-muted">Part in table frame:</span> ` +
+                     `X=${p.x.toFixed(1)} Y=${p.y.toFixed(1)} Z=${p.z.toFixed(1)} ` +
+                     `A=${(data.part_angle_deg || 0).toFixed(1)}&deg;`;
+        }
+    }
+    tel.innerHTML = html;
+
+    // Update coordinate tables
+    document.getElementById('ws-table-pos').textContent = '(0, 0, 0) Origin';
+    document.getElementById('ws-table-dist').textContent = data.table_found ? data.table_dist_mm + ' mm' : '--';
+
+    if (data.part_position) {
+        document.getElementById('ws-part-x').textContent = data.part_position.x.toFixed(2);
+        document.getElementById('ws-part-y').textContent = data.part_position.y.toFixed(2);
+        document.getElementById('ws-part-z').textContent = data.part_position.z.toFixed(2);
+        document.getElementById('ws-part-angle').textContent = (data.part_angle_deg || 0).toFixed(2);
+    } else {
+        ['ws-part-x', 'ws-part-y', 'ws-part-z', 'ws-part-angle'].forEach(id =>
+            document.getElementById(id).textContent = '--');
+    }
+
+    if (data.nominal_part_position) {
+        document.getElementById('ws-nom-x').textContent = data.nominal_part_position.x.toFixed(2);
+        document.getElementById('ws-nom-y').textContent = data.nominal_part_position.y.toFixed(2);
+        document.getElementById('ws-nom-z').textContent = data.nominal_part_position.z.toFixed(2);
+    } else {
+        ['ws-nom-x', 'ws-nom-y', 'ws-nom-z'].forEach(id =>
+            document.getElementById(id).textContent = '--');
+    }
+
+    if (data.displacement) {
+        const d = data.displacement;
+        const colorVal = (v) => Math.abs(v) < 1 ? 'text-success' : Math.abs(v) < 5 ? 'text-warning' : 'text-danger';
+        const mapping = {dx: 'ws-disp-dx', dy: 'ws-disp-dy', dz: 'ws-disp-dz', dangle: 'ws-disp-da'};
+        for (const [key, elId] of Object.entries(mapping)) {
+            const el = document.getElementById(elId);
+            if (el && d[key] !== undefined) {
+                el.textContent = d[key].toFixed(2);
+                el.className = 'font-monospace ' + colorVal(d[key]);
+            }
+        }
+    } else {
+        ['ws-disp-dx', 'ws-disp-dy', 'ws-disp-dz', 'ws-disp-da'].forEach(id =>
+            document.getElementById(id).textContent = '--');
+    }
+}
+
+function captureWorkspace() {
+    fetch('/api/calibration/workspace/', {method: 'POST'})
+    .then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(t.substring(0, 200)); });
+        return r.json();
+    })
+    .then(d => {
+        if (d.status === 'ok') {
+            drawWorkspace(d);
+            updateWsTelemetry(d);
+        } else {
+            document.getElementById('ws-telemetry').innerHTML =
+                '<span class="text-danger">' + (d.message || 'Error') + '</span>';
+        }
+    })
+    .catch(e => {
+        document.getElementById('ws-telemetry').innerHTML =
+            '<span class="text-danger">Error: ' + e.message + '</span>';
+    });
+}
+
+function toggleWsAuto() {
+    const btn = document.getElementById('btn-ws-auto');
+    if (wsAutoInterval) {
+        clearInterval(wsAutoInterval);
+        wsAutoInterval = null;
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-outline-info');
+    } else {
+        captureWorkspace();
+        wsAutoInterval = setInterval(captureWorkspace, 1000);
+        btn.classList.remove('btn-outline-info');
+        btn.classList.add('btn-info');
+    }
+}
+
+// Draw empty workspace on load
+(function() {
+    const canvas = document.getElementById('ws-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#555';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Click "Capture" to detect tags and show workspace', canvas.width/2, canvas.height/2);
+    ctx.textAlign = 'start';
+})();
+
+function captureSegmentation() {
+    fetch('/api/calibration/segmentation/', {method: 'POST'})
+    .then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(t.substring(0, 200)); });
+        return r.json();
+    })
+    .then(d => {
+        if (d.status === 'ok') {
+            const img = document.getElementById('seg-image');
+            img.src = 'data:image/jpeg;base64,' + d.image;
+            img.style.display = 'block';
+            document.getElementById('seg-placeholder').style.display = 'none';
+            document.getElementById('seg-info').style.display = 'block';
+            document.getElementById('seg-found').textContent = d.detection.total_detected;
+            document.getElementById('seg-rejected').textContent = d.detection.rejected_candidates;
+            let detail = '';
+            d.detection.tags_found.forEach(t => {
+                const cls = t.type === 'table' ? 'text-success' : t.type === 'part' ? 'text-info' : 'text-muted';
+                detail += `<span class="${cls} me-3">ID:${t.id} [${t.type}] ${t.distance_mm}mm</span>`;
+            });
+            if (d.detection.auto_detected_dict) {
+                detail += `<span class="text-warning ms-2 fw-bold">AUTO: ${d.detection.auto_detected_dict} — update in Settings!</span>`;
+            }
+            document.getElementById('seg-tags-detail').innerHTML = detail;
+        } else {
+            document.getElementById('seg-placeholder').style.display = 'block';
+            document.getElementById('seg-placeholder').innerHTML =
+                '<p class="text-danger small mb-0">' + (d.message || 'Detection failed') + '</p>';
+        }
+    })
+    .catch(e => {
+        document.getElementById('seg-placeholder').style.display = 'block';
+        document.getElementById('seg-placeholder').innerHTML =
+            '<p class="text-danger small mb-0">Error: ' + e.message + '</p>';
+    });
+}
+
+function toggleSegAuto() {
+    const btn = document.getElementById('btn-seg-auto');
+    if (segAutoInterval) {
+        clearInterval(segAutoInterval);
+        segAutoInterval = null;
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-outline-info');
+    } else {
+        captureSegmentation();
+        segAutoInterval = setInterval(captureSegmentation, 1500);
+        btn.classList.remove('btn-outline-info');
+        btn.classList.add('btn-info');
+    }
+}
+
+function startVideoStream() {
+    if (videoWs) videoWs.close();
+    const img = document.getElementById('video-feed');
+    const ph = document.getElementById('video-placeholder');
+    videoWs = new WebSocket(`ws://${window.location.host}/ws/video/`);
+    videoWs.onmessage = (e) => {
+        const d = JSON.parse(e.data);
+        if (d.type === 'frame') { img.src = 'data:image/jpeg;base64,' + d.image; img.style.display='block'; ph.style.display='none'; }
+    };
+}
+function stopVideoStream() { if (videoWs) { videoWs.close(); videoWs = null; } document.getElementById('video-feed').style.display='none'; document.getElementById('video-placeholder').style.display='block'; }
+
+function scanAllTags() {
+    const tagList = document.getElementById('tag-list');
+    tagList.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm"></span> Scanning...</span>';
+
+    fetch('/api/calibration/scan-tags/', {method: 'POST'})
+    .then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(t.substring(0, 200)); });
+        return r.json();
+    })
+    .then(d => {
+        if (d.status !== 'ok') {
+            tagList.innerHTML = `<span class="text-danger">${d.message || 'Scan failed'}</span>`;
+            return;
+        }
+        if (d.tags.length === 0) {
+            tagList.innerHTML = '<span class="text-danger">No tags detected. Check camera and ArUco dictionary.</span>';
+            return;
+        }
+
+        // Update current assignment display
+        document.getElementById('cur-table-id').textContent = 'ID ' + d.current_table_id;
+        document.getElementById('cur-part-id').textContent = 'ID ' + d.current_part_id;
+
+        // Build tag list with role selectors
+        let html = `<div class="text-muted mb-2">${d.total} tag(s) found [${d.aruco_dict}]</div>`;
+        d.tags.forEach(tag => {
+            const roleColor = tag.role === 'table' ? 'text-success' : tag.role === 'part' ? 'text-warning' : 'text-muted';
+            html += `<div class="d-flex align-items-center justify-content-between mb-2 p-1 rounded" style="background: #1a1a2e;">`;
+            html += `  <div>`;
+            html += `    <span class="fw-bold ${roleColor}">ID ${tag.id}</span>`;
+            html += `    <span class="text-muted ms-1">${tag.distance_mm}mm</span>`;
+            html += `  </div>`;
+            html += `  <select class="form-select form-select-sm bg-darker" style="width: 100px; font-size: 0.75rem;" `;
+            html += `    onchange="onTagRoleChange()" data-tag-id="${tag.id}">`;
+            html += `    <option value="none" ${tag.role === 'none' ? 'selected' : ''}> -- </option>`;
+            html += `    <option value="table" ${tag.role === 'table' ? 'selected' : ''}>Table</option>`;
+            html += `    <option value="part" ${tag.role === 'part' ? 'selected' : ''}>Part</option>`;
+            html += `  </select>`;
+            html += `</div>`;
+        });
+        html += `<button class="btn btn-success btn-sm w-100 mt-2" id="btn-save-tags" onclick="saveTagAssignment()" disabled>`;
+        html += `  <i class="bi bi-check-lg"></i> Save Assignment`;
+        html += `</button>`;
+        tagList.innerHTML = html;
+    })
+    .catch(e => {
+        tagList.innerHTML = `<span class="text-danger">Error: ${e.message}</span>`;
+    });
+}
+
+function onTagRoleChange() {
+    // Enforce: only one table and one part
+    const selects = document.querySelectorAll('#tag-list select');
+    let tableCount = 0, partCount = 0;
+    selects.forEach(s => {
+        if (s.value === 'table') tableCount++;
+        if (s.value === 'part') partCount++;
+    });
+
+    const saveBtn = document.getElementById('btn-save-tags');
+    if (tableCount === 1 && partCount === 1) {
+        saveBtn.disabled = false;
+        saveBtn.className = 'btn btn-success btn-sm w-100 mt-2';
+        saveBtn.innerHTML = '<i class="bi bi-check-lg"></i> Save Assignment';
+    } else {
+        saveBtn.disabled = true;
+        saveBtn.className = 'btn btn-secondary btn-sm w-100 mt-2';
+        let msg = [];
+        if (tableCount !== 1) msg.push(tableCount === 0 ? 'Select a Table tag' : 'Only 1 Table');
+        if (partCount !== 1) msg.push(partCount === 0 ? 'Select a Part tag' : 'Only 1 Part');
+        saveBtn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + msg.join(' | ');
+    }
+}
+
+function saveTagAssignment() {
+    const selects = document.querySelectorAll('#tag-list select');
+    let tableId = null, partId = null;
+    selects.forEach(s => {
+        if (s.value === 'table') tableId = parseInt(s.dataset.tagId);
+        if (s.value === 'part') partId = parseInt(s.dataset.tagId);
+    });
+
+    if (tableId === null || partId === null) return;
+
+    fetch('/api/calibration/assign-tags/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({table_tag_id: tableId, part_tag_id: partId})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            document.getElementById('cur-table-id').textContent = 'ID ' + d.table_tag_id;
+            document.getElementById('cur-part-id').textContent = 'ID ' + d.part_tag_id;
+            const btn = document.getElementById('btn-save-tags');
+            btn.className = 'btn btn-outline-success btn-sm w-100 mt-2';
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Saved!';
+            btn.disabled = true;
+        } else {
+            alert('Error: ' + d.message);
+        }
+    });
+}
+
+function teachNominal() {
+    if (!confirm('Teach nominal position? Part must be at reference position.')) return;
+    fetch('/api/calibration/teach-nominal/', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            document.getElementById('teach-status').innerHTML = '<span class="text-success">Nominal taught!</span>';
+        } else {
+            document.getElementById('teach-status').innerHTML = '<span class="text-danger">' + d.message + '</span>';
+        }
+    });
+}
+
+// ── Hand-Eye Calibration ────────────────────────────────────
+function captureHandEye() {
+    fetch('/api/hand-eye/capture/', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            document.getElementById('he-count').textContent = d.sample_count;
+            if (d.sample_count >= 5) document.getElementById('btn-he-compute').disabled = false;
+        } else {
+            alert('Error: ' + d.message);
+        }
+    });
+}
+
+function computeHandEye() {
+    document.getElementById('btn-he-compute').disabled = true;
+    fetch('/api/hand-eye/compute/', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            heMatrix = d.matrix;
+            document.getElementById('he-result').style.display = 'block';
+            document.getElementById('he-translation').textContent = d.translation_mm;
+        } else {
+            alert('Error: ' + d.message);
+            document.getElementById('btn-he-compute').disabled = false;
+        }
+    });
+}
+
+function applyHandEye() {
+    if (!heMatrix) return;
+    fetch('/api/hand-eye/apply/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({matrix: heMatrix})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') alert('Hand-eye calibration applied!');
+        else alert('Error: ' + d.message);
+    });
+}
+
+function resetHandEye() {
+    fetch('/api/hand-eye/reset/', {method: 'POST'})
+    .then(r => r.json())
+    .then(() => {
+        document.getElementById('he-count').textContent = '0';
+        document.getElementById('btn-he-compute').disabled = true;
+        document.getElementById('he-result').style.display = 'none';
+        heMatrix = null;
+    });
+}
+
+// ── HSV Tuner ───────────────────────────────────────────────
+function getHSVValues() {
+    return {
+        lower: [parseInt(document.getElementById('h-low').value),
+                parseInt(document.getElementById('s-low').value),
+                parseInt(document.getElementById('v-low').value)],
+        upper: [parseInt(document.getElementById('h-high').value),
+                parseInt(document.getElementById('s-high').value),
+                parseInt(document.getElementById('v-high').value)],
+    };
+}
+
+function previewHSV() {
+    const vals = getHSVValues();
+    fetch('/api/vision/hsv-preview/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(vals)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            const img = document.getElementById('hsv-preview');
+            img.src = 'data:image/jpeg;base64,' + d.image;
+            img.style.display = 'block';
+            document.getElementById('hsv-mask-pct').textContent = d.mask_percent + '%';
+        } else {
+            alert('Error: ' + d.message);
+        }
+    });
+}
+
+function saveHSV() {
+    const vals = getHSVValues();
+    fetch('/api/vision/hsv-save/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(vals)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') alert('HSV thresholds saved!');
+        else alert('Error: ' + d.message);
+    });
+}
+
+// ── Auto-Calibration & Repeatability ────────────────────────
+function runAutoCal() {
+    const n = parseInt(document.getElementById('auto-cycles').value) || 3;
+    const el = document.getElementById('auto-cal-result');
+    el.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running ' + n + ' cycles...';
+
+    fetch('/api/calibration/auto-cycle/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cycles: n})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            let html = `<span class="text-success">${d.cycles_success}/${d.cycles_total} cycles OK</span>`;
+            if (d.dry_run) html += ' <span class="badge bg-warning">DRY RUN</span>';
+            html += '<br><span class="text-muted">Avg correction:</span> ';
+            for (const [k, v] of Object.entries(d.avg_correction)) {
+                const color = Math.abs(v) < 1 ? 'text-success' : Math.abs(v) < 5 ? 'text-warning' : 'text-danger';
+                html += `<span class="${color}">${k}=${v}</span> `;
+            }
+            el.innerHTML = html;
+        } else {
+            el.innerHTML = '<span class="text-danger">' + d.message + '</span>';
+        }
+    })
+    .catch(e => { el.innerHTML = '<span class="text-danger">Error: ' + e + '</span>'; });
+}
+
+function runRepeatability() {
+    const n = parseInt(document.getElementById('auto-cycles').value) || 10;
+    const el = document.getElementById('auto-cal-result');
+    el.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running repeatability test...';
+
+    fetch('/api/calibration/repeatability-test/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cycles: n})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            const s = d.stats;
+            let html = `<span class="text-info">${s.n_samples}/${s.n_total} detections</span><br>`;
+            html += '<table class="table table-dark table-sm mt-1" style="font-size:0.75rem;"><thead><tr><th></th><th>Mean</th><th>Std</th><th>Range</th></tr></thead><tbody>';
+            for (const axis of ['x', 'y', 'z']) {
+                const a = s[axis];
+                html += `<tr><td class="fw-bold">${axis.toUpperCase()}</td><td>${a.mean}</td><td>${a.std}</td><td>${a.range}</td></tr>`;
+            }
+            html += '</tbody></table>';
+            el.innerHTML = html;
+        } else {
+            el.innerHTML = '<span class="text-danger">' + d.message + '</span>';
+        }
+    })
+    .catch(e => { el.innerHTML = '<span class="text-danger">Error: ' + e + '</span>'; });
+}
+
+function toggleDryRun() {
+    fetch('/api/calibration/toggle-dry-run/', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            document.getElementById('dry-run-toggle').checked = d.dry_run;
+        }
+    });
+}
+
+function runCalibration() {
+    const btn = document.getElementById('btn-calibrate');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Calibrating...';
+
+    fetch('/api/calibration/full-cycle/', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> CALIBRATE';
+        document.getElementById('cal-results').style.display = 'block';
+
+        if (d.status === 'success') {
+            let corrHtml = '';
+            for (const [k, v] of Object.entries(d.correction)) {
+                const color = Math.abs(v) < 1 ? 'text-success' : Math.abs(v) < 5 ? 'text-warning' : 'text-danger';
+                corrHtml += `<tr><td>${k}</td><td class="${color}">${v.toFixed(3)}</td></tr>`;
+            }
+            document.getElementById('correction-table').innerHTML = corrHtml;
+
+            let baseHtml = '';
+            for (const [k, v] of Object.entries(d.corrected_base)) {
+                baseHtml += `<tr><td>${k}</td><td class="text-info">${v.toFixed(3)}</td></tr>`;
+            }
+            document.getElementById('base-table').innerHTML = baseHtml;
+
+            document.getElementById('cal-magnitude').innerHTML =
+                `<span class="text-muted">Translation: </span><span class="text-orange">${d.translation_mm}mm</span> | ` +
+                `<span class="text-muted">Rotation: </span><span class="text-orange">${d.rotation_deg}deg</span>`;
+        } else {
+            document.getElementById('correction-table').innerHTML = `<tr><td colspan="2" class="text-danger">${d.message}</td></tr>`;
+            document.getElementById('base-table').innerHTML = '';
+            document.getElementById('cal-magnitude').innerHTML = '';
+        }
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> CALIBRATE';
+        alert('Error: ' + e);
+    });
+}
+
+// ── Prerequisites Status ────────────────────────────────────
+function updatePrereqs() {
+    function setPrereq(id, ok, label) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = ok
+            ? '<i class="bi bi-check-circle text-success"></i> ' + label
+            : '<i class="bi bi-x-circle text-danger"></i> ' + label;
+    }
+    fetch('/api/robot/status/').then(r => r.json())
+        .then(d => setPrereq('prereq-robot', d.connected, 'Robot Connected'))
+        .catch(() => setPrereq('prereq-robot', false, 'Robot Connected'));
+    fetch('/api/camera/status/').then(r => r.json())
+        .then(d => setPrereq('prereq-camera', d.opened, 'Camera Connected'))
+        .catch(() => setPrereq('prereq-camera', false, 'Camera Connected'));
+}
+updatePrereqs();
+setInterval(updatePrereqs, 5000);
+</script>
+{% endblock %}

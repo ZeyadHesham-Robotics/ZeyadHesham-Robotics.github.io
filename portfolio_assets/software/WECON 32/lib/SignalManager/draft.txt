@@ -1,0 +1,51 @@
+#define RXD2 16
+#define TXD2 17
+
+byte buffer[256];
+int bufIndex = 0;
+unsigned long lastByteTime = 0;
+const unsigned long frameGap = 5; // ms gap to detect end of Modbus frame
+
+void setup()
+{
+    Serial.begin(115200);
+    Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2); // adjust baudrate
+}
+
+void loop()
+{
+    while (Serial2.available())
+    {
+        byte b = Serial2.read();
+        buffer[bufIndex++] = b;
+        lastByteTime = millis();
+        if (bufIndex >= sizeof(buffer))
+            bufIndex = 0;
+    }
+
+    if (bufIndex > 0 && (millis() - lastByteTime > frameGap))
+    {
+        // Check function code
+        byte slave = buffer[0];
+        byte func = buffer[1];
+
+        // Function 0x10 (Write Multiple Registers) → contains values we need
+        if (func == 0x10 && bufIndex > 9)
+        {
+            // Values start at buffer[7]
+            uint16_t escFreq = (buffer[7] << 8) | buffer[8]; // 100
+            uint16_t led2 = (buffer[9] << 8) | buffer[10];   // 50
+            uint16_t led1 = (buffer[13] << 8) | buffer[14];  // 66
+
+            Serial.print("ESC Freq: ");
+            Serial.print(escFreq);
+            Serial.print(" | LED2: ");
+            Serial.print(led2);
+            Serial.print(" | LED1: ");
+            Serial.println(led1);
+        }
+
+        // Reset buffer for next packet
+        bufIndex = 0;
+    }
+}

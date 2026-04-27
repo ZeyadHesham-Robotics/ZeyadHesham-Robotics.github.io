@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../Desktop/Projects/AMR2"
+		},
+		{
+			"name": "AMR2 ARM",
+			"path": ".."
+		},
+		{
+			"name": "Sorter",
+			"path": "../../Sorter"
+		}
+	],
+	"settings": {}
+}
