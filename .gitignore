@@ -9,3 +9,8 @@ Thumbs.db
 
 # Private application materials (emails, drafts) — never push
 private/
+
+# Claude / IDE work folders
+.claude/
+**/.claude/
+.vscode/
